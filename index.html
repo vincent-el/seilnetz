@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seilnetz V2: The Sonic Web</title>
+    
+    <!-- External Dependencies (CDN) -->
+    <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
+    <script src="https://unpkg.com/three@0.132.2/build/three.min.js"></script>
+    <script src="https://unpkg.com/gsap@3.7.1/dist/gsap.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #050505;
+            --panel-bg: rgba(10, 10, 10, 0.85);
+            --text-color: #e0e0e0;
+            --accent-color: #ff6b35;
+            --success-color: #7ae582;
+            --border-color: #333;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            font-family: 'IBM Plex Mono', monospace;
+            color: var(--text-color);
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Let clicks pass through to canvas */
+            z-index: 1;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        #debug-panel {
+            width: 300px;
+            height: 100%;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--border-color);
+            padding: 20px;
+            box-sizing: border-box;
+            pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            color: var(--accent-color);
+            margin-top: 0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        h2 {
+            font-size: 0.9rem;
+            color: #888;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+
+        .led {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #333;
+            margin-right: 10px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+
+        .led.active { background: var(--success-color); box-shadow: 0 0 8px var(--success-color); }
+        .led.error { background: #f00; box-shadow: 0 0 8px #f00; }
+
+        button {
+            background: #222;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 8px 12px;
+            font-family: inherit;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            background: #333;
+            border-color: #555;
+        }
+
+        button.active {
+            background: var(--accent-color);
+            color: #000;
+            border-color: var(--accent-color);
+        }
+
+        #log {
+            flex: 1;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            font-size: 0.7rem;
+            overflow-y: auto;
+            font-family: 'Menlo', monospace;
+            margin-top: 20px;
+        }
+
+        .log-entry { margin-bottom: 2px; }
+        .log-entry span { opacity: 0.6; }
+        
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        select {
+            width: 100%;
+            background: #222;
+            color: white;
+            border: 1px solid #333;
+            padding: 5px;
+            font-family: inherit;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="overlay">Click to Enter The Net</div>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        <div id="debug-panel">
+            <h1>🕸️ Seilnetz V2</h1>
+            
+            <div class="status-section">
+                <div class="status-indicator">
+                    <div id="led-audio" class="led"></div>
+                    <span>Audio Engine</span>
+                </div>
+                <div class="status-indicator">
+                    <div id="led-midi" class="led"></div>
+                    <span id="midi-status-text">No MIDI Device</span>
+                </div>
+            </div>
+
+            <h2>Simulation</h2>
+            <button id="btn-autoplay">Toggle Auto-Play</button>
+            
+            <h2>Sound Design</h2>
+            <div class="controls-grid">
+                <select id="scale-select">
+                    <option value="safe">C Major 9 (Safe)</option>
+                    <option value="pentatonic">Pentatonic</option>
+                    <option value="wholetone">Whole Tone (Dreamy)</option>
+                    <option value="hirajoshi">Hirajoshi (Dark)</option>
+                </select>
+            </div>
+
+            <h2>Log</h2>
+            <div id="log"></div>
+        </div>
+    </div>
+
+<script>
+/**
+ * SEILNETZ V2 - SINGLE FILE ARCHITECTURE
+ * ======================================
+ * 
+ * Modules:
+ * 1. CONFIG: Central source of truth
+ * 2. EventBus: Pub/Sub system
+ * 3. AudioEngine: Tone.js synthesis
+ * 4. Visualizer: Three.js scene
+ * 5. InputManager: MIDI, Keyboard, AutoPlay
+ * 6. App: Main orchestrator
+ */
+
+// --- 1. CONFIGURATION ---
+const CONFIG = {
+    scales: {
+        safe:       [36, 43, 52, 59, 62, 67], // C2, G2, E3, B3, D4, G4 (Original)
+        pentatonic: [36, 38, 40, 43, 45, 48], // C Major Pentatonic
+        wholetone:  [36, 38, 40, 42, 44, 46], // C Whole Tone
+        hirajoshi:  [36, 38, 39, 43, 44, 48], // C Hirajoshi
+    },
+    colors: [
+        0xff6b35, // Orange
+        0xf7c59f, // Peach
+        0xefefd0, // Cream
+        0x004e89, // Dark Blue
+        0x1a659e, // Medium Blue
+        0x7ae582  // Green
+    ],
+    nodes: [
+        { x: -2, y: 0, z: 0 },   // 0: Left
+        { x: 2, y: 0, z: 0 },    // 1: Right
+        { x: 0, y: 2, z: 0 },    // 2: Top
+        { x: 0, y: -2, z: 0 },   // 3: Bottom
+        { x: 0, y: 0, z: 2 },    // 4: Front
+        { x: 0, y: 0, z: -2 },   // 5: Back
+    ],
+    audio: {
+        envelope: { attack: 0.4, decay: 0.3, sustain: 0.6, release: 4 },
+        reverb: { decay: 8, wet: 0.5 }
+    }
+};
+
+// --- 2. EVENT BUS ---
+class EventBus {
+    constructor() {
+        this.listeners = {};
+    }
+    on(event, callback) {
+        if (!this.listeners[event]) this.listeners[event] = [];
+        this.listeners[event].push(callback);
+    }
+    emit(event, data) {
+        if (this.listeners[event]) {
+            this.listeners[event].forEach(cb => cb(data));
+        }
+    }
+}
+
+// --- 3. AUDIO ENGINE ---
+class AudioEngine {
+    constructor(bus) {
+        this.bus = bus;
+        this.activeScale = CONFIG.scales.safe;
+        this.synth = null;
+        this.ready = false;
+        
+        this.bus.on('trigger', (data) => this.play(data.sensor, data.velocity));
+        this.bus.on('set-scale', (name) => { this.activeScale = CONFIG.scales[name]; });
+    }
+
+    async init() {
+        await Tone.start();
+        
+        this.synth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: 'sine' },
+            envelope: CONFIG.audio.envelope,
+            maxPolyphony: 6
+        });
+
+        const filter = new Tone.Filter(2000, "lowpass");
+        const reverb = new Tone.Reverb(CONFIG.audio.reverb);
+        
+        this.synth.connect(filter);
+        filter.connect(reverb);
+        reverb.toDestination();
+
+        // Make filter responsive to velocity later?
+        // For now just static setup
+        
+        this.ready = true;
+        return true;
+    }
+
+    play(sensorIndex, velocity) {
+        if (!this.ready) return;
+        
+        // Map sensor (0-5) to note in current scale
+        // Wrap around if we have more sensors than notes
+        const noteIndex = sensorIndex % this.activeScale.length;
+        const midiNote = this.activeScale[noteIndex];
+        const noteName = Tone.Frequency(midiNote, "midi").toNote();
+        
+        const volume = velocity / 127;
+        
+        this.synth.triggerAttack(noteName, Tone.now(), volume);
+        this.synth.triggerRelease(noteName, Tone.now() + 0.2); // Allow release phase
+    }
+}
+
+// --- 4. VISUALIZER (THREE.JS) ---
+class NetVisualizer {
+    constructor(container, bus) {
+        this.container = container;
+        this.bus = bus;
+        this.nodes = [];
+        this.edges = [];
+
+        this.initScene();
+        this.createNet();
+        this.animate();
+
+        this.bus.on('trigger', (data) => this.triggerNode(data.sensor, data.velocity));
+        
+        // Handle resize
+        window.addEventListener('resize', () => this.onResize());
+    }
+
+    initScene() {
+        this.scene = new THREE.Scene();
+        this.scene.fog = new THREE.FogExp2(0x050505, 0.05);
+
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.camera.position.z = 8;
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.container.appendChild(this.renderer.domElement);
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        this.scene.add(ambientLight);
+        
+        const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+        pointLight.position.set(0, 10, 10);
+        this.scene.add(pointLight);
+    }
+
+    createNet() {
+        const geometry = new THREE.IcosahedronGeometry(0.5, 1);
+        
+        CONFIG.nodes.forEach((pos, i) => {
+            const material = new THREE.MeshStandardMaterial({
+                color: CONFIG.colors[i % CONFIG.colors.length],
+                emissive: CONFIG.colors[i % CONFIG.colors.length],
+                emissiveIntensity: 0.2,
+                roughness: 0.4,
+                metalness: 0.8
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(pos.x, pos.y, pos.z);
+            this.scene.add(mesh);
+            this.nodes.push(mesh);
+            
+            // Add a point light to each node for glow
+            const light = new THREE.PointLight(CONFIG.colors[i], 1, 4);
+            mesh.add(light);
+        });
+
+        // Connect all nodes (The Net)
+        const lineMaterial = new THREE.LineBasicMaterial({ 
+            color: 0xffffff, 
+            transparent: true, 
+            opacity: 0.1 
+        });
+
+        for (let i = 0; i < this.nodes.length; i++) {
+            for (let j = i + 1; j < this.nodes.length; j++) {
+                const points = [];
+                points.push(this.nodes[i].position);
+                points.push(this.nodes[j].position);
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                this.scene.add(line);
+                this.edges.push(line);
+            }
+        }
+    }
+
+    triggerNode(index, velocity) {
+        if (index >= this.nodes.length) return;
+        
+        const node = this.nodes[index];
+        const intensity = velocity / 127;
+        
+        // 1. Scale animation (Punch)
+        gsap.fromTo(node.scale, 
+            { x: 2.0, y: 2.0, z: 2.0 }, 
+            { x: 1, y: 1, z: 1, duration: 0.6, ease: "elastic.out(1, 0.3)" }
+        );
+
+        // 2. Glow animation
+        gsap.fromTo(node.material, 
+            { emissiveIntensity: 2.0 * intensity }, 
+            { emissiveIntensity: 0.2, duration: 2.0, ease: "power2.out" }
+        );
+
+        // 3. Rotation kick
+        gsap.to(node.rotation, {
+            x: node.rotation.x + Math.random(),
+            y: node.rotation.y + Math.random(),
+            duration: 1
+        });
+    }
+
+    animate() {
+        requestAnimationFrame(() => this.animate());
+        
+        // Subtle idle animation
+        const time = Date.now() * 0.001;
+        this.scene.rotation.y = Math.sin(time * 0.1) * 0.2;
+        
+        // Float nodes slightly
+        this.nodes.forEach((node, i) => {
+            node.position.y += Math.sin(time + i) * 0.002;
+        });
+
+        this.renderer.render(this.scene, this.camera);
+    }
+
+    onResize() {
+        this.camera.aspect = window.innerWidth / window.innerHeight;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+}
+
+// --- 5. INPUT MANAGERS ---
+
+class MIDIInput {
+    constructor(bus) {
+        this.bus = bus;
+        this.setup();
+    }
+
+    async setup() {
+        try {
+            const access = await navigator.requestMIDIAccess();
+            this.updateStatus(access);
+            access.onstatechange = (e) => this.updateStatus(e.target);
+            
+            // Bind inputs
+            access.inputs.forEach(input => {
+                input.onmidimessage = (msg) => this.handleMessage(msg);
+            });
+        } catch (e) {
+            this.bus.emit('log', 'MIDI not supported or denied');
+        }
+    }
+
+    updateStatus(access) {
+        let connected = false;
+        let name = "";
+        if (access.inputs && access.inputs.size > 0) {
+            connected = true;
+            name = access.inputs.values().next().value.name; // Get first device name
+        }
+        this.bus.emit('midi-status', { connected, name });
+    }
+
+    handleMessage(msg) {
+        const [status, note, velocity] = msg.data;
+        if (status === 144 && velocity > 0) {
+            // Normalize note: hardware sends 0-5? or 36...?
+            // We assume 0-5 if < 12, otherwise map MIDI note to index
+            let sensorIndex = note;
+            if (note > 12) {
+                // Try to find index in default scale
+                sensorIndex = CONFIG.scales.safe.indexOf(note);
+                if (sensorIndex === -1) sensorIndex = note % 6; // Fallback
+            }
+            this.bus.emit('trigger', { sensor: sensorIndex, velocity, source: 'MIDI' });
+        }
+    }
+}
+
+class KeyboardInput {
+    constructor(bus) {
+        document.addEventListener('keydown', (e) => {
+            if (e.repeat) return;
+            const key = parseInt(e.key);
+            if (key >= 1 && key <= 6) {
+                const velocity = 80 + Math.floor(Math.random() * 47);
+                bus.emit('trigger', { sensor: key - 1, velocity, source: 'KBD' });
+            }
+        });
+    }
+}
+
+class AutoPlay {
+    constructor(bus) {
+        this.bus = bus;
+        this.running = false;
+        this.timer = null;
+    }
+    
+    toggle() {
+        this.running = !this.running;
+        if (this.running) this.loop();
+        else clearTimeout(this.timer);
+        return this.running;
+    }
+
+    loop() {
+        if (!this.running) return;
+        
+        const sensor = Math.floor(Math.random() * 6);
+        const velocity = 60 + Math.floor(Math.random() * 60);
+        this.bus.emit('trigger', { sensor, velocity, source: 'AUTO' });
+        
+        const nextTime = 200 + Math.random() * 600; // Fast, organic rhythm
+        this.timer = setTimeout(() => this.loop(), nextTime);
+    }
+}
+
+// --- 6. MAIN APP ---
+
+class SeilnetzApp {
+    constructor() {
+        this.bus = new EventBus();
+        
+        // Setup DOM references
+        this.dom = {
+            log: document.getElementById('log'),
+            overlay: document.getElementById('overlay'),
+            ledAudio: document.getElementById('led-audio'),
+            ledMidi: document.getElementById('led-midi'),
+            midiStatus: document.getElementById('midi-status-text'),
+            btnAuto: document.getElementById('btn-autoplay'),
+            scaleSelect: document.getElementById('scale-select')
+        };
+
+        // Init core modules
+        this.audio = new AudioEngine(this.bus);
+        this.viz = new NetVisualizer(document.getElementById('canvas-container'), this.bus);
+        
+        // Inputs
+        this.midi = new MIDIInput(this.bus);
+        this.kbd = new KeyboardInput(this.bus);
+        this.auto = new AutoPlay(this.bus);
+
+        // Bind UI events
+        this.setupUI();
+        this.setupLogging();
+    }
+
+    setupUI() {
+        // Start Audio Context
+        this.dom.overlay.addEventListener('click', async () => {
+            await this.audio.init();
+            this.dom.overlay.style.opacity = 0;
+            setTimeout(() => this.dom.overlay.remove(), 500);
+            this.dom.ledAudio.classList.add('active');
+            this.bus.emit('log', 'Audio Engine Started');
+        });
+
+        // Auto Play Toggle
+        this.dom.btnAuto.addEventListener('click', () => {
+            const isRunning = this.auto.toggle();
+            this.dom.btnAuto.classList.toggle('active', isRunning);
+            this.bus.emit('log', isRunning ? 'Auto-Play Started' : 'Auto-Play Stopped');
+        });
+
+        // Scale Select
+        this.dom.scaleSelect.addEventListener('change', (e) => {
+            this.bus.emit('set-scale', e.target.value);
+            this.bus.emit('log', `Scale changed to ${e.target.value}`);
+        });
+
+        // MIDI Status Update
+        this.bus.on('midi-status', (status) => {
+            if (status.connected) {
+                this.dom.ledMidi.classList.add('active');
+                this.dom.midiStatus.textContent = status.name || "MIDI Connected";
+                this.bus.emit('log', `MIDI Device Found: ${status.name}`);
+            } else {
+                this.dom.ledMidi.classList.remove('active');
+                this.dom.midiStatus.textContent = "No MIDI Device";
+            }
+        });
+    }
+
+    setupLogging() {
+        this.bus.on('trigger', (data) => {
+            this.log(`[${data.source}] Sensor:${data.sensor} Vel:${data.velocity}`);
+        });
+        this.bus.on('log', (msg) => this.log(msg));
+    }
+
+    log(text) {
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+        const time = new Date().toISOString().substr(14, 9);
+        div.innerHTML = `<span>${time}</span> ${text}`;
+        this.dom.log.prepend(div);
+        if (this.dom.log.children.length > 20) this.dom.log.lastChild.remove();
+    }
+}
+
+// Ignite
+window.addEventListener('DOMContentLoaded', () => {
+    window.app = new SeilnetzApp();
+});
+
+</script>
+</body>
+</html>
