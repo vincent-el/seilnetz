@@ -1,80 +1,121 @@
-# Seilnetz V2: The Sonic Web
+# Seilnetz V2.1: The Sonic Web
 
-## 🕸️ Overview
-Seilnetz V2 is a sound-reactive 3D visualization of a net structure. It serves as the software counterpart to the physical installation, translating MIDI signals from the net into immersive audio and visual feedback.
+A sound-reactive 3D visualization that transforms MIDI input from a physical rope net installation into immersive audio and visuals.
 
-## 🚀 Quick Start
-1. **Open:** Drag `index.html` into Google Chrome.
-2. **Start:** Click the overlay to initialize the Audio Engine.
-3. **Play:**
-   - Press keys `1`-`6` on your keyboard.
-   - Click "Toggle Auto-Play" for a demo.
-   - Connect your ESP32 via Bluetooth MIDI.
+## Quick Start
+
+1. **Open** `index.html` in Google Chrome
+2. **Click** the overlay to enable audio
+3. **Play** using keys `1-6` or connect a MIDI device
 
 ---
 
-## 🎹 Features
+## 🎹 Connecting MIDI Hardware
 
-### 1. Audio Engine (Tone.js)
-- **Polyphonic Synthesis:** 6-voice sine wave synth with slow attack ADSR.
-- **Reverb Wash:** Integrated reverb for atmospheric depth.
-- **Scales:** Selectable musical scales (Safe C9, Pentatonic, Whole Tone, Hirajoshi).
+The webapp uses the **Web MIDI API** which reads devices already paired at the OS level.
 
-### 2. Visualization (Three.js)
-- **3D Net:** 6 nodes arranged in 3D space connected by lines.
-- **Reactive Animation:**
-  - **Punch:** Nodes scale up on trigger.
-  - **Glow:** Emissive material pulses based on velocity.
-  - **Drift:** Entire net floats gently in idle state.
+### macOS Setup
 
-### 3. Inputs
-- **MIDI:** Auto-detects connected MIDI devices.
-- **Keyboard:** Maps number keys 1-6 to sensors 0-5.
-- **Auto-Play:** Generates organic random patterns for testing.
+1. Open **Audio MIDI Setup** (in `/Applications/Utilities/`)
+2. Menu → **Window** → **Show MIDI Studio**
+3. Click the **Bluetooth** icon (🔵) in the toolbar
+4. Turn on your ESP32/MIDI controller
+5. Click **Connect** when it appears
+6. Open `index.html` in Chrome → Device auto-detected
+
+### Windows Setup
+
+Windows doesn't natively support Bluetooth MIDI. Options:
+
+| Method                   | Description                                                                                                                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **USB MIDI**             | Plug in directly. Works immediately.                                                                                                                                                      |
+| **loopMIDI + MIDIberry** | Free. Creates virtual MIDI ports for BLE. [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) + [MIDIberry](https://apps.microsoft.com/store/detail/midiberry/9N39720H2M05) |
+| **BOME Bluetooth MIDI**  | Paid ($29). Most reliable BLE MIDI bridge.                                                                                                                                                |
+
+Once your device is visible to Windows, Chrome will see it via Web MIDI API.
+
+### Testing Without Hardware
+
+- Press keys **1-6** on your keyboard
+- Click **Start Auto-Play** for random demo stream
 
 ---
 
-## 🛠️ Architecture
-Single-file architecture (`index.html`) for maximum portability.
+## 🔊 Sound Presets
 
-```mermaid
-graph TD
-    A[Inputs] -->|Emit 'trigger'| B(EventBus)
-    subgraph Sources
-    A1[MIDI]
-    A2[Keyboard]
-    A3[AutoPlay]
-    end
-    
-    B -->|Subscribe| C[AudioEngine]
-    B -->|Subscribe| D[Visualizer]
-    B -->|Subscribe| E[DebugPanel]
-    
-    C -->|Tone.js| Speakers
-    D -->|Three.js| Canvas
-    E -->|DOM| Sidebar
+| Preset                   | Character                           | Use Case                  |
+| ------------------------ | ----------------------------------- | ------------------------- |
+| **CMaj9 – Safe**         | Warm, consonant, forgiving          | Default. Always pleasant. |
+| **Pentatonic – Bright**  | Clear, crystalline, higher register | More "present" sound      |
+| **Eno Drones – Ambient** | Slow swells, long release, washy    | Meditative, ambient       |
+| **Chaos + Screech**      | 5 nice notes + 1 EAR-PIERCING       | Demonstrates range, alarm |
+
+---
+
+## 🎮 Controls
+
+| Input          | Action              |
+| -------------- | ------------------- |
+| **Keys 1-6**   | Trigger sensors 0-5 |
+| **Left-drag**  | Rotate camera       |
+| **Scroll**     | Zoom in/out         |
+| **Right-drag** | Pan camera          |
+
+---
+
+## 📁 Files
+
+```
+seilnetz/
+├── index.html      # Complete app (single file)
+├── README.md       # This file
+├── DESIGN_DOC.md   # Original design document
+└── *.png           # Reference photos of physical net
 ```
 
-### Configuration
-All parameters are tunable in the `CONFIG` object at the top of the script:
-- **Scales:** Add new arrays of MIDI note numbers.
-- **Colors:** Hex codes for the nodes.
-- **Node Positions:** x, y, z coordinates.
-- **Audio:** ADSR envelope and Reverb settings.
+---
+
+## 🔧 For Collaborators
+
+### Sharing with Others
+
+1. Send them `index.html` (or share the GitHub repo)
+2. They open it in Chrome
+3. If using MIDI hardware: follow OS-specific setup above
+4. If testing: use keyboard keys 1-6 or Auto-Play
+
+### ESP32 MIDI Protocol
+
+The webapp expects:
+- **MIDI Channel:** Any
+- **Note Numbers:** `0-5` (maps directly to sensors) OR higher notes (modulo 6)
+- **Velocity:** `1-127` (affects volume and visual intensity)
 
 ---
 
-## 🔌 Hardware Integration
-The system listens for MIDI Note On messages (status 144).
-- **Note Number:** Interpreted as sensor index (0-5).
-  - *Fallback:* If note > 12, it tries to map musical notes back to index.
-- **Velocity:** Maps to volume and visual brightness (1-127).
+## Architecture
 
-**Bluetooth MIDI (ESP32):**
-Ensure your ESP32 device advertises as a BLE MIDI service. Chrome on Mac/Android supports this natively. On Windows, you may need a bridge.
+```
+┌─────────────────────────────────────────────────┐
+│              INPUT SOURCES                      │
+│   MIDI (ESP32)  │  Keyboard (1-6)  │  AutoPlay  │
+└────────┬────────┴────────┬─────────┴────┬───────┘
+         └─────────────────┼──────────────┘
+                           ▼
+                    ┌─────────────┐
+                    │  Event Bus  │
+                    └──────┬──────┘
+           ┌───────────────┼───────────────┐
+           ▼               ▼               ▼
+    ┌────────────┐  ┌────────────┐  ┌────────────┐
+    │   Audio    │  │    Viz     │  │    Log     │
+    │  (Tone.js) │  │ (Three.js) │  │   (DOM)    │
+    └────────────┘  └────────────┘  └────────────┘
+```
 
 ---
 
-## 📜 Legacy
-Previous Python and SuperCollider experiments have been archived in the `legacy/` folder (if applicable, or removed to keep the project clean).
+## License
 
+Part of the Design & Computation program project work.
