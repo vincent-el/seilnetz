@@ -339,15 +339,6 @@
             }
         };
 
-        const NODE_POSITIONS = [
-            { x: -2, y: 0, z: 0 },
-            { x: 2, y: 0, z: 0 },
-            { x: 0, y: 1.8, z: 0 },
-            { x: 0, y: -1.8, z: 0 },
-            { x: 0, y: 0, z: 2 },
-            { x: 0, y: 0, z: -2 }
-        ];
-
         // === EVENT BUS ===
         class Bus {
             constructor() { this.subs = {}; }
@@ -409,6 +400,23 @@
             }
         }
 
+
+        // Flat "Star/Web" Topology
+        // 1 Center Node + 5 Radial Nodes
+        const RADIUS = 3.5;
+        const NODE_POSITIONS = [
+            { x: 0, y: 0, z: 0 }, // Center
+        ];
+
+        // Generate 5 radial points
+        for (let i = 0; i < 5; i++) {
+            const angle = (i / 5) * Math.PI * 2; // 72 degrees apart
+            NODE_POSITIONS.push({
+                x: Math.cos(angle) * RADIUS,
+                y: 0, // Flat on floor
+                z: Math.sin(angle) * RADIUS
+            });
+        }
         // === 3D VISUALIZER ===
         class Viz {
             constructor(container, bus) {
@@ -425,7 +433,8 @@
 
                 // Camera
                 this.camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 100);
-                this.camera.position.set(0, 2, 8);
+                this.camera.position.set(0, 8, 8); // Higher angle
+                this.camera.lookAt(0, 0, 0);
 
                 // Renderer
                 this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -469,6 +478,11 @@
             }
 
             createNet() {
+                // Offset the whole group to center it in the visible area (left of panel)
+                this.netGroup = new THREE.Group();
+                this.netGroup.position.x = -1.5;
+                this.scene.add(this.netGroup);
+
                 const geo = new THREE.SphereGeometry(0.4, 32, 32);
 
                 NODE_POSITIONS.forEach((pos, i) => {
@@ -481,19 +495,28 @@
                     });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(pos.x, pos.y, pos.z);
-                    this.scene.add(mesh);
+                    this.netGroup.add(mesh);
                     this.nodes.push(mesh);
                     this.basePosY.push(pos.y);
                 });
 
                 // Edges (ropes)
                 const lineMat = new THREE.LineBasicMaterial({ color: 0xcccccc, linewidth: 2 });
-                for (let i = 0; i < this.nodes.length; i++) {
-                    for (let j = i + 1; j < this.nodes.length; j++) {
-                        const pts = [this.nodes[i].position.clone(), this.nodes[j].position.clone()];
-                        const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-                        this.scene.add(new THREE.Line(lineGeo, lineMat));
-                    }
+
+                // 1. Radial lines (Center to Ring)
+                // Node 0 is center, 1-5 are ring
+                for (let i = 1; i < this.nodes.length; i++) {
+                    const pts = [this.nodes[0].position.clone(), this.nodes[i].position.clone()];
+                    const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+                    this.netGroup.add(new THREE.Line(lineGeo, lineMat));
+                }
+
+                // 2. Ring lines (1-2, 2-3, ..., 5-1)
+                for (let i = 1; i < this.nodes.length; i++) {
+                    const next = i === this.nodes.length - 1 ? 1 : i + 1;
+                    const pts = [this.nodes[i].position.clone(), this.nodes[next].position.clone()];
+                    const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+                    this.netGroup.add(new THREE.Line(lineGeo, lineMat));
                 }
             }
 
