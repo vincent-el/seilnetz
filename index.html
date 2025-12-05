@@ -247,6 +247,8 @@
                     <option value="safe">CMaj9 – Safe & Warm</option>
                     <option value="bright">Pentatonic – Bright</option>
                     <option value="eno">Eno Drones – Ambient</option>
+                    <option value="abm7">A♭m7 – Melancholic</option>
+                    <option value="cbmaj7">C♭maj7 – Ethereal</option>
                     <option value="chaos">Chaos – 5 + Screech</option>
                 </select>
             </section>
@@ -318,6 +320,22 @@
                 oscillator: 'square',
                 filterFreq: 10000,
                 reverbWet: 0.2
+            },
+            abm7: {
+                name: 'A♭m7 – Melancholic',
+                notes: [44, 48, 51, 54, 56, 60], // A♭2, C3, E♭3, G♭3, A♭3, C4
+                envelope: { attack: 0.1, decay: 0.1, sustain: 0.8, release: 2 },
+                oscillator: 'triangle',
+                filterFreq: 8000,
+                reverbWet: 0.3
+            },
+            cbmaj7: {
+                name: 'C♭maj7 – Ethereal',
+                notes: [35, 39, 42, 47, 51, 58], // B1, E♭2, G♭2, B2, E♭3, B♭3
+                envelope: { attack: 0.1, decay: 0.1, sustain: 0.8, release: 2 },
+                oscillator: 'triangle',
+                filterFreq: 8000,
+                reverbWet: 0.3
             }
         };
 
