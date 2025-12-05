@@ -540,15 +540,34 @@
 
             bind(access) {
                 let found = false;
+                // Debounce: ignore triggers within this many ms per sensor
+                const DEBOUNCE_MS = 150;
+                const lastTrigger = [0, 0, 0, 0, 0, 0];
+
                 access.inputs.forEach(input => {
                     found = true;
                     this.bus.emit('midi-status', { connected: true, name: input.name });
                     input.onmidimessage = msg => {
                         const [status, note, vel] = msg.data;
-                        if (status === 144 && vel > 0) {
-                            // Accept notes 0-5 directly, or mod 6 for higher notes
-                            const sensor = note < 12 ? note : note % 6;
-                            this.bus.emit('trigger', { sensor, velocity: vel, source: 'MIDI' });
+
+                        const channel = (status & 0x0F) + 1;  // Extract channel (1-16)
+                        const msgType = status & 0xF0;        // Extract message type
+
+                        // Note On = 0x90-0x9F (144-159)
+                        if (msgType === 0x90 && vel > 0) {
+                            // YOUR HARDWARE: Channel number = Sensor index
+                            // Channel 1 → Sensor 0, Channel 2 → Sensor 1, etc.
+                            const sensor = channel - 1;
+
+                            // Only accept channels 1-6 (sensors 0-5)
+                            if (sensor >= 0 && sensor < 6) {
+                                const now = Date.now();
+                                // Debounce: skip if triggered too recently
+                                if (now - lastTrigger[sensor] > DEBOUNCE_MS) {
+                                    lastTrigger[sensor] = now;
+                                    this.bus.emit('trigger', { sensor, velocity: vel, source: 'MIDI', channel });
+                                }
+                            }
                         }
                     };
                 });
@@ -652,7 +671,14 @@
             }
 
             bindLog() {
-                this.bus.on('trigger', d => this.log(`[${d.source}] Sensor ${d.sensor} @ ${d.velocity}`));
+                // Track trigger counts per sensor
+                this.triggerCounts = [0, 0, 0, 0, 0, 0];
+
+                this.bus.on('trigger', d => {
+                    this.triggerCounts[d.sensor]++;
+                    const ch = d.channel ? ` ch:${d.channel}` : '';
+                    this.log(`[${d.source}] Sensor ${d.sensor}${ch} vel:${d.velocity} (#${this.triggerCounts[d.sensor]})`);
+                });
                 this.bus.on('log', msg => this.log(msg));
             }
 
