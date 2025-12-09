@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seilnetz V2.1: The Sonic Web</title>
+    <title>Seilnetz V2.2: The Sonic Web</title>
 
     <!-- CDN Dependencies -->
     <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
@@ -14,7 +14,7 @@
     <style>
         :root {
             --bg: #f5f5f5;
-            --panel-bg: rgba(255, 255, 255, 0.9);
+            --panel-bg: rgba(255, 255, 255, 0.95);
             --text: #222;
             --text-muted: #666;
             --accent: #d4a017;
@@ -23,37 +23,44 @@
             /* Red */
             --success: #2ecc71;
             --border: #ddd;
+            --debug-bg: #1a1a1a;
+            --debug-text: #0f0;
         }
 
         * {
             box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            margin: 0;
             font-family: 'SF Mono', 'Menlo', monospace;
             background: var(--bg);
             color: var(--text);
             overflow: hidden;
+            height: 100vh;
+            width: 100vw;
         }
 
+        /* === 3D CANVAS === */
         #canvas-container {
             position: fixed;
             inset: 0;
             z-index: 0;
         }
 
+        /* === UI SIDEBAR === */
         #ui-layer {
             position: fixed;
             inset: 0;
             pointer-events: none;
-            z-index: 1;
+            z-index: 10;
             display: flex;
             justify-content: flex-end;
         }
 
         #panel {
-            width: 320px;
+            width: 340px;
             height: 100%;
             background: var(--panel-bg);
             backdrop-filter: blur(20px);
@@ -63,6 +70,7 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
+            box-shadow: -5px 0 20px rgba(0, 0, 0, 0.05);
         }
 
         h1 {
@@ -76,7 +84,7 @@
         }
 
         section {
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
 
         h2 {
@@ -85,8 +93,12 @@
             text-transform: uppercase;
             letter-spacing: 1px;
             margin: 0 0 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
+        /* Status LEDs */
         .status-row {
             display: flex;
             align-items: center;
@@ -108,6 +120,7 @@
             box-shadow: 0 0 10px var(--success);
         }
 
+        /* Controls */
         button {
             width: 100%;
             padding: 10px;
@@ -132,6 +145,16 @@
             color: #000;
         }
 
+        button.secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        button.secondary:hover {
+            background: #eee;
+        }
+
         select {
             width: 100%;
             padding: 8px;
@@ -139,12 +162,36 @@
             font-size: 0.8rem;
             border: 1px solid var(--border);
             background: white;
+            margin-bottom: 12px;
+        }
+
+        /* === SOUNDSCAPE VISUALIZER === */
+        #adsr-canvas {
+            width: 100%;
+            height: 100px;
+            background: #fff;
+            border: 1px solid var(--border);
             margin-bottom: 8px;
         }
 
+        .param-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .param-value {
+            color: var(--text);
+            font-weight: bold;
+            float: right;
+        }
+
+        /* === LOG === */
         #log {
             flex: 1;
-            min-height: 150px;
+            min-height: 100px;
             background: #fff;
             border: 1px solid var(--border);
             padding: 10px;
@@ -155,36 +202,117 @@
 
         .log-entry {
             margin-bottom: 2px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 2px;
         }
 
         .log-time {
             opacity: 0.5;
+            margin-right: 5px;
         }
 
-        details {
-            background: #fff;
-            border: 1px solid var(--border);
-            padding: 10px;
-            margin-bottom: 10px;
+        /* === LABELS === */
+        .node-label {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-family: var(--mono);
+            pointer-events: none;
+            border: 1px solid var(--accent);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transform: translate(-50%, -100%);
+            margin-top: -15px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .node-label.visible {
+            opacity: 1;
+        }
+
+        .node-label strong {
+            color: var(--glow);
+        }
+
+        /* === DEBUG FOOTER === */
+        #debug-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: calc(100% - 340px);
+            /* Subtract panel width */
+            background: var(--debug-bg);
+            color: #eee;
+            border-top: 2px solid var(--accent);
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            height: 300px;
+        }
+
+        #debug-footer.open {
+            transform: translateY(0);
+        }
+
+        .debug-header {
+            padding: 8px 16px;
+            background: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #444;
+        }
+
+        .debug-content {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .debug-sidebar {
+            padding: 16px;
+            border-right: 1px solid #444;
+            background: #222;
+            font-size: 0.8rem;
+        }
+
+        .debug-log {
+            padding: 16px;
+            font-family: 'Monaco', monospace;
             font-size: 0.75rem;
+            color: var(--debug-text);
+            overflow-y: auto;
+            background: #111;
         }
 
-        details summary {
+        .debug-stat {
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .debug-toggle {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            z-index: 30;
+            background: var(--debug-bg);
+            color: #fff;
+            border: 1px solid var(--border);
+            padding: 5px 10px;
+            font-size: 0.7rem;
+            border-radius: 4px;
             cursor: pointer;
-            font-weight: bold;
-            color: var(--accent);
+            width: auto;
         }
 
-        details p {
-            margin: 10px 0 0 0;
-            line-height: 1.5;
-        }
-
-        details code {
-            background: #eee;
-            padding: 2px 4px;
-        }
-
+        /* === OVERLAY === */
         #overlay {
             position: fixed;
             inset: 0;
@@ -204,10 +332,6 @@
             border: none;
             font-size: 2rem;
         }
-
-        #overlay p {
-            opacity: 0.6;
-        }
     </style>
 </head>
 
@@ -219,6 +343,31 @@
     </div>
 
     <div id="canvas-container"></div>
+    <div id="labels-container"></div>
+
+    <button id="debug-toggle" class="debug-toggle">🛠️ Debug Console</button>
+
+    <div id="debug-footer">
+        <div class="debug-header">
+            <span>Hardware Diagnostics</span>
+            <button onclick="app.debug.clear()" style="width: auto; padding: 4px 8px; margin: 0;">Clear Log</button>
+        </div>
+        <div class="debug-content">
+            <div class="debug-sidebar">
+                <div class="debug-stat"><span>API Status:</span> <span id="dbg-api">Checking...</span></div>
+                <div class="debug-stat"><span>Inputs:</span> <span id="dbg-inputs">0</span></div>
+                <div class="debug-stat"><span>Last Msg:</span> <span id="dbg-last">-</span></div>
+                <div class="debug-stat" style="margin-top: 20px; color: #888;">
+                    MIDI Channel → Sensor Mapping:<br>
+                    Ch 1 → Sensor 0<br>
+                    Ch 2 → Sensor 1<br>
+                    ...<br>
+                    Ch 6 → Sensor 5
+                </div>
+            </div>
+            <div id="raw-midi-log" class="debug-log">Waiting for MIDI...</div>
+        </div>
+    </div>
 
     <div id="ui-layer">
         <div id="panel">
@@ -237,12 +386,12 @@
             </section>
 
             <section>
-                <h2>Simulation</h2>
-                <button id="btn-auto">Start Auto-Play</button>
+                <h2>Visualization</h2>
+                <button id="btn-labels" class="secondary active">Show Labels</button>
             </section>
 
             <section>
-                <h2>Sound Preset</h2>
+                <h2>Soundscape</h2>
                 <select id="preset-select">
                     <option value="safe">CMaj9 – Safe & Warm</option>
                     <option value="bright">Pentatonic – Bright</option>
@@ -251,30 +400,23 @@
                     <option value="cbmaj7">C♭maj7 – Ethereal</option>
                     <option value="chaos">Chaos – 5 + Screech</option>
                 </select>
+
+                <canvas id="adsr-canvas" width="300" height="100"></canvas>
+                <div class="param-grid" id="sound-params">
+                    <!-- Filled by JS -->
+                </div>
             </section>
 
             <section>
-                <details>
-                    <summary>How to Connect MIDI</summary>
-                    <p><strong>macOS:</strong> Open Audio MIDI Setup → Window → Show MIDI Studio → Click Bluetooth icon
-                        → Connect your device.</p>
-                    <p><strong>Windows:</strong> Use USB MIDI, or install <code>loopMIDI</code> + <code>MIDIberry</code>
-                        for Bluetooth.</p>
-                    <p>Once paired at OS level, refresh this page. Device will appear above.</p>
-                </details>
-            </section>
-
-            <section>
-                <h2>Controls</h2>
-                <p style="font-size: 0.7rem; color: var(--text-muted); margin: 0;">
-                    Keys 1-6: Trigger sensors<br>
-                    Drag: Rotate view<br>
-                    Scroll: Zoom
-                </p>
+                <h2>Simulation</h2>
+                <button id="btn-auto">Start Auto-Play</button>
             </section>
 
             <section style="flex: 1; display: flex; flex-direction: column;">
-                <h2>Log</h2>
+                <h2>
+                    Event Log
+                    <span style="font-size: 0.6rem; cursor: pointer;" onclick="app.clearLog()">CLEAR</span>
+                </h2>
                 <div id="log"></div>
             </section>
         </div>
@@ -282,24 +424,23 @@
 
     <script>
         /**
-         * SEILNETZ V2.1
-         * Clean, modular, single-file architecture
-         * KISS / DRY / YAGNI
+         * SEILNETZ V2.2
+         * Integrated Soundscape Visualizer & Debug Console
          */
 
         // === CONFIGURATION ===
         const PRESETS = {
             safe: {
                 name: 'CMaj9 Safe',
-                notes: [36, 43, 52, 59, 62, 67], // C2, G2, E3, B3, D4, G4
-                envelope: { attack: 0.4, decay: 0.2, sustain: 0.6, release: 4 },
+                notes: [36, 43, 52, 59, 62, 67],
+                envelope: { attack: 0.3, decay: 0.2, sustain: 0.6, release: 4 },
                 oscillator: 'sine',
                 filterFreq: 3000,
                 reverbWet: 0.5
             },
             bright: {
                 name: 'Pentatonic Bright',
-                notes: [60, 62, 64, 67, 69, 72], // C4, D4, E4, G4, A4, C5
+                notes: [60, 62, 64, 67, 69, 72],
                 envelope: { attack: 0.1, decay: 0.1, sustain: 0.8, release: 2 },
                 oscillator: 'triangle',
                 filterFreq: 8000,
@@ -307,23 +448,15 @@
             },
             eno: {
                 name: 'Eno Drones',
-                notes: [36, 52, 55, 59, 64, 71], // C2, E3, G3, B3, E4, B4 (wide)
-                envelope: { attack: 4, decay: 1, sustain: 0.8, release: 12 },
+                notes: [36, 52, 55, 59, 64, 71],
+                envelope: { attack: 2, decay: 0.5, sustain: 0.8, release: 12 },
                 oscillator: 'sine',
-                filterFreq: 1500,
+                filterFreq: 3000,
                 reverbWet: 0.9
-            },
-            chaos: {
-                name: 'Chaos + Screech',
-                notes: [48, 52, 55, 59, 62, 96], // C3, E3, G3, B3, D4, C7 (SCREECH)
-                envelope: { attack: 0.01, decay: 0.1, sustain: 1, release: 0.5 },
-                oscillator: 'square',
-                filterFreq: 10000,
-                reverbWet: 0.2
             },
             abm7: {
                 name: 'A♭m7 – Melancholic',
-                notes: [44, 48, 51, 54, 56, 60], // A♭2, C3, E♭3, G♭3, A♭3, C4
+                notes: [44, 48, 51, 54, 56, 60],
                 envelope: { attack: 0.1, decay: 0.1, sustain: 0.8, release: 2 },
                 oscillator: 'triangle',
                 filterFreq: 8000,
@@ -331,13 +464,33 @@
             },
             cbmaj7: {
                 name: 'C♭maj7 – Ethereal',
-                notes: [35, 39, 42, 47, 51, 58], // B1, E♭2, G♭2, B2, E♭3, B♭3
+                notes: [35, 39, 42, 47, 51, 58],
                 envelope: { attack: 0.1, decay: 0.1, sustain: 0.8, release: 2 },
                 oscillator: 'triangle',
                 filterFreq: 8000,
                 reverbWet: 0.3
+            },
+            chaos: {
+                name: 'Chaos + Screech',
+                notes: [48, 52, 55, 59, 62, 96],
+                envelope: { attack: 0.01, decay: 0.1, sustain: 1, release: 0.5 },
+                oscillator: 'square',
+                filterFreq: 10000,
+                reverbWet: 0.2
             }
         };
+
+        // Flat "Web" Topology
+        const RADIUS = 3.5;
+        const NODE_POSITIONS = [{ x: 0, y: 0, z: 0 }]; // Center
+        for (let i = 0; i < 5; i++) {
+            const angle = (i / 5) * Math.PI * 2;
+            NODE_POSITIONS.push({
+                x: Math.cos(angle) * RADIUS,
+                y: 0,
+                z: Math.sin(angle) * RADIUS
+            });
+        }
 
         // === EVENT BUS ===
         class Bus {
@@ -346,10 +499,142 @@
             emit(e, d) { this.subs[e]?.forEach(fn => fn(d)); }
         }
 
+        // === SOUNDSCAPE VISUALIZER ===
+        class SoundscapeViz {
+            constructor(canvasId, paramsId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.paramsEl = document.getElementById(paramsId);
+            }
+
+            draw(preset) {
+                const { width, height } = this.canvas;
+                const ctx = this.ctx;
+                const env = preset.envelope;
+
+                // Clear
+                ctx.clearRect(0, 0, width, height);
+                ctx.fillStyle = '#fafafa';
+                ctx.fillRect(0, 0, width, height);
+
+                // Calc points
+                const totalTime = env.attack + env.decay + 1 + env.release; // 1s sustain for viz
+                const timeScale = width / Math.min(totalTime, 5); // Cap visual width
+
+                const attackX = env.attack * timeScale;
+                const decayX = attackX + (env.decay * timeScale);
+                const sustainX = decayX + (1 * timeScale);
+                const releaseX = sustainX + (env.release * timeScale);
+
+                const sustainY = height - (env.sustain * height * 0.8);
+                const peakY = height * 0.1;
+                const baseY = height;
+
+                // Draw Curve
+                ctx.beginPath();
+                ctx.moveTo(0, baseY);
+                ctx.lineTo(attackX, peakY); // Attack
+                ctx.lineTo(decayX, sustainY); // Decay
+                ctx.lineTo(sustainX, sustainY); // Sustain
+                ctx.lineTo(releaseX, baseY); // Release
+
+                ctx.strokeStyle = '#d4a017';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.fillStyle = 'rgba(212, 160, 23, 0.1)';
+                ctx.fill();
+
+                // Waveform Icon
+                this.drawWaveform(preset.oscillator, width - 30, 20);
+
+                // Update Params Text
+                this.paramsEl.innerHTML = `
+            <div>Attack <span class="param-value">${env.attack}s</span></div>
+            <div>Release <span class="param-value">${env.release}s</span></div>
+            <div>Wave <span class="param-value">${preset.oscillator}</span></div>
+            <div>Reverb <span class="param-value">${preset.reverbWet * 100}%</span></div>
+        `;
+            }
+
+            drawWaveform(type, x, y) {
+                const ctx = this.ctx;
+                ctx.beginPath();
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 1.5;
+
+                if (type === 'sine') {
+                    ctx.moveTo(x, y);
+                    ctx.bezierCurveTo(x + 5, y - 10, x + 10, y + 10, x + 15, y);
+                } else if (type === 'square') {
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x, y - 8);
+                    ctx.lineTo(x + 7, y - 8);
+                    ctx.lineTo(x + 7, y + 8);
+                    ctx.lineTo(x + 15, y + 8);
+                    ctx.lineTo(x + 15, y);
+                } else if (type === 'triangle') {
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + 7, y - 10);
+                    ctx.lineTo(x + 15, y);
+                }
+                ctx.stroke();
+            }
+        }
+
+        // === DEBUGGER ===
+        class Debugger {
+            constructor() {
+                this.el = {
+                    footer: document.getElementById('debug-footer'),
+                    toggle: document.getElementById('debug-toggle'),
+                    log: document.getElementById('raw-midi-log'),
+                    api: document.getElementById('dbg-api'),
+                    inputs: document.getElementById('dbg-inputs'),
+                    last: document.getElementById('dbg-last')
+                };
+
+                this.isOpen = false;
+                this.el.toggle.onclick = () => this.toggle();
+
+                // Check API immediately
+                if (navigator.requestMIDIAccess) {
+                    this.el.api.textContent = "Available";
+                    this.el.api.style.color = "#0f0";
+                } else {
+                    this.el.api.textContent = "Not Supported";
+                    this.el.api.style.color = "#f00";
+                }
+            }
+
+            toggle() {
+                this.isOpen = !this.isOpen;
+                this.el.footer.classList.toggle('open', this.isOpen);
+                this.el.toggle.classList.toggle('active', this.isOpen);
+            }
+
+            log(msg) {
+                const line = document.createElement('div');
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                this.el.log.prepend(line);
+                if (this.el.log.children.length > 50) this.el.log.lastChild.remove();
+                this.el.last.textContent = msg;
+            }
+
+            updateInputs(count) {
+                this.el.inputs.textContent = count;
+            }
+
+            clear() {
+                this.el.log.innerHTML = '';
+            }
+        }
+
         // === AUDIO ENGINE ===
         class Audio {
-            constructor(bus) {
+            constructor(bus, viz) {
                 this.bus = bus;
+                this.viz = viz;
                 this.synth = null;
                 this.filter = null;
                 this.reverb = null;
@@ -358,15 +643,16 @@
 
                 bus.on('trigger', d => this.play(d.sensor, d.velocity));
                 bus.on('preset', name => this.setPreset(name));
+
+                // Initial Draw
+                this.viz.draw(this.preset);
             }
 
             async init() {
                 await Tone.start();
-
                 this.synth = new Tone.PolySynth(Tone.Synth, { maxPolyphony: 8 });
                 this.filter = new Tone.Filter(3000, 'lowpass');
                 this.reverb = new Tone.Reverb({ decay: 8, wet: 0.5 });
-
                 this.synth.chain(this.filter, this.reverb, Tone.Destination);
                 this.applyPreset();
                 this.ready = true;
@@ -374,6 +660,7 @@
 
             setPreset(name) {
                 this.preset = PRESETS[name] || PRESETS.safe;
+                this.viz.draw(this.preset); // Update visualizer
                 if (this.ready) this.applyPreset();
             }
 
@@ -392,48 +679,30 @@
                 const note = this.preset.notes[sensor % this.preset.notes.length];
                 const noteName = Tone.Frequency(note, 'midi').toNote();
                 const vol = velocity / 127;
-
                 this.synth.triggerAttack(noteName, Tone.now(), vol);
-                // Release based on preset - drones hold longer
                 const holdTime = this.preset.envelope.attack + 0.1;
                 this.synth.triggerRelease(noteName, Tone.now() + holdTime);
             }
         }
 
-
-        // Flat "Star/Web" Topology
-        // 1 Center Node + 5 Radial Nodes
-        const RADIUS = 3.5;
-        const NODE_POSITIONS = [
-            { x: 0, y: 0, z: 0 }, // Center
-        ];
-
-        // Generate 5 radial points
-        for (let i = 0; i < 5; i++) {
-            const angle = (i / 5) * Math.PI * 2; // 72 degrees apart
-            NODE_POSITIONS.push({
-                x: Math.cos(angle) * RADIUS,
-                y: 0, // Flat on floor
-                z: Math.sin(angle) * RADIUS
-            });
-        }
         // === 3D VISUALIZER ===
         class Viz {
             constructor(container, bus) {
                 this.bus = bus;
                 this.nodes = [];
                 this.basePosY = [];
-                this.isDragging = false;
-                this.prevMouse = { x: 0, y: 0 };
-                this.rotation = { x: 0.3, y: 0 };
+                this.labels = [];
+                this.showLabels = true;
+                this.container = container;
+                this.labelsContainer = document.getElementById('labels-container');
 
                 // Scene
                 this.scene = new THREE.Scene();
-                this.scene.background = new THREE.Color(0xf0f0f0);
+                this.scene.background = new THREE.Color(0xf5f5f5);
 
                 // Camera
                 this.camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 100);
-                this.camera.position.set(0, 8, 8); // Higher angle
+                this.camera.position.set(0, 6, 6);
                 this.camera.lookAt(0, 0, 0);
 
                 // Renderer
@@ -442,27 +711,30 @@
                 this.renderer.setPixelRatio(devicePixelRatio);
                 container.appendChild(this.renderer.domElement);
 
-                // Simple drag controls
+                // Controls
                 const canvas = this.renderer.domElement;
-                canvas.addEventListener('mousedown', e => {
-                    this.isDragging = true;
-                    this.prevMouse = { x: e.clientX, y: e.clientY };
-                });
+                let isDragging = false, prevMouse = { x: 0, y: 0 };
+                let rot = { x: 0.5, y: 0 };
+
+                canvas.addEventListener('mousedown', e => { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY } });
                 canvas.addEventListener('mousemove', e => {
-                    if (!this.isDragging) return;
-                    const dx = e.clientX - this.prevMouse.x;
-                    const dy = e.clientY - this.prevMouse.y;
-                    this.rotation.y += dx * 0.005;
-                    this.rotation.x += dy * 0.005;
-                    this.rotation.x = Math.max(-1, Math.min(1, this.rotation.x));
-                    this.prevMouse = { x: e.clientX, y: e.clientY };
+                    if (!isDragging) return;
+                    const dx = e.clientX - prevMouse.x;
+                    const dy = e.clientY - prevMouse.y;
+                    rot.y += dx * 0.005;
+                    rot.x += dy * 0.005;
+                    rot.x = Math.max(0.1, Math.min(1.5, rot.x)); // Limit vertical
+
+                    // Orbit logic
+                    const dist = 8;
+                    this.camera.position.x = Math.sin(rot.y) * dist;
+                    this.camera.position.z = Math.cos(rot.y) * dist;
+                    this.camera.position.y = rot.x * 5;
+                    this.camera.lookAt(0, 0, 0);
+
+                    prevMouse = { x: e.clientX, y: e.clientY };
                 });
-                canvas.addEventListener('mouseup', () => this.isDragging = false);
-                canvas.addEventListener('mouseleave', () => this.isDragging = false);
-                canvas.addEventListener('wheel', e => {
-                    this.camera.position.z += e.deltaY * 0.01;
-                    this.camera.position.z = Math.max(3, Math.min(20, this.camera.position.z));
-                });
+                canvas.addEventListener('mouseup', () => isDragging = false);
 
                 // Lights
                 this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
@@ -474,83 +746,94 @@
                 this.animate();
 
                 bus.on('trigger', d => this.triggerNode(d.sensor, d.velocity));
+                bus.on('toggle-labels', show => this.toggleLabels(show));
                 window.addEventListener('resize', () => this.resize());
             }
 
             createNet() {
-                // Offset the whole group to center it in the visible area (left of panel)
                 this.netGroup = new THREE.Group();
-                this.netGroup.position.x = -1.5;
+                this.netGroup.position.x = -1.5; // Offset for UI
                 this.scene.add(this.netGroup);
 
                 const geo = new THREE.SphereGeometry(0.4, 32, 32);
 
                 NODE_POSITIONS.forEach((pos, i) => {
+                    // Mesh
                     const mat = new THREE.MeshStandardMaterial({
                         color: 0xffffff,
-                        emissive: 0xcc2936, // Red glow
+                        emissive: 0xcc2936,
                         emissiveIntensity: 0.1,
-                        roughness: 0.3,
-                        metalness: 0.1
+                        roughness: 0.3, metalness: 0.1
                     });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(pos.x, pos.y, pos.z);
                     this.netGroup.add(mesh);
                     this.nodes.push(mesh);
                     this.basePosY.push(pos.y);
+
+                    // Label
+                    const label = document.createElement('div');
+                    label.className = 'node-label visible';
+                    label.innerHTML = `<strong>Sensor ${i}</strong><br>Ch ${i + 1}`;
+                    this.labelsContainer.appendChild(label);
+                    this.labels.push({ el: label, obj: mesh });
                 });
 
-                // Edges (ropes)
+                // Edges
                 const lineMat = new THREE.LineBasicMaterial({ color: 0xcccccc, linewidth: 2 });
-
-                // 1. Radial lines (Center to Ring)
-                // Node 0 is center, 1-5 are ring
                 for (let i = 1; i < this.nodes.length; i++) {
-                    const pts = [this.nodes[0].position.clone(), this.nodes[i].position.clone()];
-                    const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+                    // Center to ring
+                    let pts = [this.nodes[0].position.clone(), this.nodes[i].position.clone()];
+                    let lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+                    this.netGroup.add(new THREE.Line(lineGeo, lineMat));
+
+                    // Ring to ring
+                    let next = i === this.nodes.length - 1 ? 1 : i + 1;
+                    pts = [this.nodes[i].position.clone(), this.nodes[next].position.clone()];
+                    lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
                     this.netGroup.add(new THREE.Line(lineGeo, lineMat));
                 }
+            }
 
-                // 2. Ring lines (1-2, 2-3, ..., 5-1)
-                for (let i = 1; i < this.nodes.length; i++) {
-                    const next = i === this.nodes.length - 1 ? 1 : i + 1;
-                    const pts = [this.nodes[i].position.clone(), this.nodes[next].position.clone()];
-                    const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-                    this.netGroup.add(new THREE.Line(lineGeo, lineMat));
-                }
+            toggleLabels(show) {
+                this.showLabels = show;
+                this.labels.forEach(l => {
+                    l.el.classList.toggle('visible', show);
+                });
             }
 
             triggerNode(index, velocity) {
                 const node = this.nodes[index];
                 if (!node) return;
-
                 const intensity = velocity / 127;
 
-                // Scale punch
-                gsap.fromTo(node.scale,
-                    { x: 1.8, y: 1.8, z: 1.8 },
-                    { x: 1, y: 1, z: 1, duration: 0.5, ease: 'elastic.out(1, 0.4)' }
-                );
-
-                // Red glow pulse
-                gsap.fromTo(node.material,
-                    { emissiveIntensity: 1.5 * intensity },
-                    { emissiveIntensity: 0.1, duration: 2, ease: 'power2.out' }
-                );
+                gsap.fromTo(node.scale, { x: 1.8, y: 1.8, z: 1.8 }, { x: 1, y: 1, z: 1, duration: 0.5, ease: 'elastic.out(1,0.4)' });
+                gsap.fromTo(node.material, { emissiveIntensity: 1.5 * intensity }, { emissiveIntensity: 0.1, duration: 2 });
             }
 
             animate() {
                 requestAnimationFrame(() => this.animate());
 
-                // Gentle float
-                const t = Date.now() * 0.001;
-                this.nodes.forEach((node, i) => {
-                    node.position.y = this.basePosY[i] + Math.sin(t + i) * 0.05;
-                });
+                // Update Labels
+                if (this.showLabels) {
+                    this.labels.forEach(item => {
+                        // Project 3D to 2D
+                        const vector = item.obj.position.clone();
+                        vector.applyMatrix4(this.netGroup.matrixWorld); // Apply offset
+                        vector.project(this.camera);
 
-                // Apply camera rotation
-                this.scene.rotation.y = this.rotation.y;
-                this.scene.rotation.x = this.rotation.x;
+                        const x = (vector.x * .5 + .5) * innerWidth;
+                        const y = (-(vector.y * .5) + .5) * innerHeight;
+
+                        // Only show if in front of camera
+                        if (vector.z < 1) {
+                            item.el.style.transform = `translate(-50%, -100%) translate(${x}px,${y}px)`;
+                            item.el.style.display = 'block';
+                        } else {
+                            item.el.style.display = 'none';
+                        }
+                    });
+                }
 
                 this.renderer.render(this.scene, this.camera);
             }
@@ -562,10 +845,32 @@
             }
         }
 
+        // === MIDI CONFIGURATION ===
+        // ┌────────────────────────────────────────────────────────┐
+        // │  Adjust these for your hardware setup                  │
+        // └────────────────────────────────────────────────────────┘
+        const MIDI_CONFIG = {
+            // Which channels to accept (1-indexed, matches hardware)
+            // Example: [1, 2, 3] = only 3 sensors connected
+            // Example: [1, 2, 3, 4, 5, 6] = all 6 sensors
+            enabledChannels: [1, 2, 3],
+
+            // Minimum velocity to trigger (0-127)
+            // Higher = less sensitive, filters weak hits & crosstalk
+            // 0 = any touch, 30 = light hits, 60 = firm hits only
+            velocityThreshold: 30,
+
+            // Milliseconds to ignore repeat triggers per sensor
+            // Prevents "ringing" from piezo vibration
+            // 150 = responsive, 300 = stable, 500 = very stable
+            debounceMs: 200
+        };
+
         // === MIDI INPUT ===
         class MIDI {
-            constructor(bus) {
+            constructor(bus, debug) {
                 this.bus = bus;
+                this.debug = debug;
                 this.init();
             }
 
@@ -581,75 +886,43 @@
 
             bind(access) {
                 let found = false;
-                // Debounce: ignore triggers within this many ms per sensor
-                const DEBOUNCE_MS = 150;
+                let count = 0;
                 const lastTrigger = [0, 0, 0, 0, 0, 0];
 
                 access.inputs.forEach(input => {
                     found = true;
+                    count++;
                     this.bus.emit('midi-status', { connected: true, name: input.name });
+
                     input.onmidimessage = msg => {
                         const [status, note, vel] = msg.data;
+                        const ch = (status & 0x0F) + 1;
+                        const type = status & 0xF0;
 
-                        const channel = (status & 0x0F) + 1;  // Extract channel (1-16)
-                        const msgType = status & 0xF0;        // Extract message type
+                        // DEBUG LOGGING (always log raw for diagnostics)
+                        this.debug.log(`RAW: [${status}] Ch:${ch} Note:${note} Vel:${vel}`);
 
-                        // Note On = 0x90-0x9F (144-159)
-                        if (msgType === 0x90 && vel > 0) {
-                            // YOUR HARDWARE: Channel number = Sensor index
-                            // Channel 1 → Sensor 0, Channel 2 → Sensor 1, etc.
-                            const sensor = channel - 1;
+                        // FILTER: Note On messages only
+                        if (type !== 0x90) return;
 
-                            // Only accept channels 1-6 (sensors 0-5)
-                            if (sensor >= 0 && sensor < 6) {
-                                const now = Date.now();
-                                // Debounce: skip if triggered too recently
-                                if (now - lastTrigger[sensor] > DEBOUNCE_MS) {
-                                    lastTrigger[sensor] = now;
-                                    this.bus.emit('trigger', { sensor, velocity: vel, source: 'MIDI', channel });
-                                }
-                            }
-                        }
+                        // FILTER: Channel must be in enabled list
+                        if (!MIDI_CONFIG.enabledChannels.includes(ch)) return;
+
+                        // FILTER: Velocity must exceed threshold
+                        if (vel < MIDI_CONFIG.velocityThreshold) return;
+
+                        const sensor = ch - 1; // Mapping Ch1->Sensor0
+                        const now = Date.now();
+
+                        // FILTER: Debounce rapid triggers
+                        if (now - lastTrigger[sensor] < MIDI_CONFIG.debounceMs) return;
+
+                        lastTrigger[sensor] = now;
+                        this.bus.emit('trigger', { sensor, velocity: vel, source: 'MIDI', channel: ch });
                     };
                 });
+                this.debug.updateInputs(count);
                 if (!found) this.bus.emit('midi-status', { connected: false });
-            }
-        }
-
-        // === KEYBOARD INPUT ===
-        class Keyboard {
-            constructor(bus) {
-                document.addEventListener('keydown', e => {
-                    if (e.repeat) return;
-                    const n = parseInt(e.key);
-                    if (n >= 1 && n <= 6) {
-                        bus.emit('trigger', { sensor: n - 1, velocity: 80 + Math.random() * 40 | 0, source: 'KBD' });
-                    }
-                });
-            }
-        }
-
-        // === AUTO-PLAY ===
-        class AutoPlay {
-            constructor(bus) {
-                this.bus = bus;
-                this.running = false;
-                this.timer = null;
-            }
-
-            toggle() {
-                this.running = !this.running;
-                if (this.running) this.tick();
-                else clearTimeout(this.timer);
-                return this.running;
-            }
-
-            tick() {
-                if (!this.running) return;
-                const sensor = Math.random() * 6 | 0;
-                const vel = 60 + Math.random() * 60 | 0;
-                this.bus.emit('trigger', { sensor, velocity: vel, source: 'AUTO' });
-                this.timer = setTimeout(() => this.tick(), 200 + Math.random() * 600);
             }
         }
 
@@ -657,37 +930,52 @@
         class App {
             constructor() {
                 this.bus = new Bus();
+                this.debug = new Debugger();
+                this.soundViz = new SoundscapeViz('adsr-canvas', 'sound-params');
 
-                // DOM
+                // UI Refs
                 this.$ = {
                     overlay: document.getElementById('overlay'),
                     ledAudio: document.getElementById('led-audio'),
                     ledMidi: document.getElementById('led-midi'),
                     midiName: document.getElementById('midi-name'),
                     btnAuto: document.getElementById('btn-auto'),
+                    btnLabels: document.getElementById('btn-labels'),
                     presetSelect: document.getElementById('preset-select'),
                     log: document.getElementById('log')
                 };
 
                 // Modules
-                this.audio = new Audio(this.bus);
                 this.viz = new Viz(document.getElementById('canvas-container'), this.bus);
-                this.midi = new MIDI(this.bus);
-                this.kbd = new Keyboard(this.bus);
+                this.audio = new Audio(this.bus, this.soundViz);
+                this.midi = new MIDI(this.bus, this.debug);
+
+                // Other inputs
                 this.auto = new AutoPlay(this.bus);
+                this.setupKeyboard();
 
                 this.bindUI();
                 this.bindLog();
             }
 
+            setupKeyboard() {
+                document.addEventListener('keydown', e => {
+                    if (e.repeat) return;
+                    const n = parseInt(e.key);
+                    if (n >= 1 && n <= 6) {
+                        this.bus.emit('trigger', { sensor: n - 1, velocity: 80, source: 'KBD' });
+                    }
+                });
+            }
+
             bindUI() {
-                // Start
+                // Start Audio
                 this.$.overlay.onclick = async () => {
                     await this.audio.init();
                     this.$.overlay.style.opacity = 0;
                     setTimeout(() => this.$.overlay.remove(), 500);
                     this.$.ledAudio.classList.add('on');
-                    this.bus.emit('log', 'Audio started');
+                    this.log('Audio started');
                 };
 
                 // Auto-play
@@ -697,43 +985,56 @@
                     this.$.btnAuto.classList.toggle('active', on);
                 };
 
-                // Preset
-                this.$.presetSelect.onchange = e => {
-                    this.bus.emit('preset', e.target.value);
-                    this.bus.emit('log', `Preset: ${PRESETS[e.target.value].name}`);
+                // Toggle Labels
+                this.$.btnLabels.onclick = () => {
+                    const isActive = this.$.btnLabels.classList.toggle('active');
+                    this.$.btnLabels.textContent = isActive ? 'Hide Labels' : 'Show Labels';
+                    this.bus.emit('toggle-labels', isActive);
                 };
 
-                // MIDI status
+                // Presets
+                this.$.presetSelect.onchange = e => {
+                    this.bus.emit('preset', e.target.value);
+                    this.log(`Preset: ${PRESETS[e.target.value].name}`);
+                };
+
+                // MIDI Status
                 this.bus.on('midi-status', s => {
                     this.$.ledMidi.classList.toggle('on', s.connected);
                     this.$.midiName.textContent = s.connected ? s.name : 'No MIDI Device';
-                    if (s.connected) this.bus.emit('log', `MIDI: ${s.name}`);
+                    if (s.connected) this.log(`MIDI: ${s.name}`);
                 });
             }
 
             bindLog() {
-                // Track trigger counts per sensor
-                this.triggerCounts = [0, 0, 0, 0, 0, 0];
-
-                this.bus.on('trigger', d => {
-                    this.triggerCounts[d.sensor]++;
-                    const ch = d.channel ? ` ch:${d.channel}` : '';
-                    this.log(`[${d.source}] Sensor ${d.sensor}${ch} vel:${d.velocity} (#${this.triggerCounts[d.sensor]})`);
-                });
+                this.bus.on('trigger', d => this.log(`[${d.source}] Sensor ${d.sensor} (Ch${d.channel || '-'}) @ ${d.velocity}`));
                 this.bus.on('log', msg => this.log(msg));
             }
 
             log(msg) {
                 const div = document.createElement('div');
                 div.className = 'log-entry';
-                const t = new Date().toISOString().slice(14, 23);
-                div.innerHTML = `<span class="log-time">${t}</span> ${msg}`;
+                div.innerHTML = `<span class="log-time">${new Date().toISOString().slice(14, 23)}</span> ${msg}`;
                 this.$.log.prepend(div);
-                while (this.$.log.children.length > 30) this.$.log.lastChild.remove();
+                while (this.$.log.children.length > 20) this.$.log.lastChild.remove();
+            }
+
+            clearLog() {
+                this.$.log.innerHTML = '';
             }
         }
 
-        // Boot
+        // Helper for AutoPlay (simplified for brevity)
+        class AutoPlay {
+            constructor(bus) { this.bus = bus; this.running = false; }
+            toggle() { this.running = !this.running; if (this.running) this.tick(); return this.running; }
+            tick() {
+                if (!this.running) return;
+                this.bus.emit('trigger', { sensor: Math.floor(Math.random() * 6), velocity: 60 + Math.floor(Math.random() * 60), source: 'AUTO' });
+                setTimeout(() => this.tick(), 200 + Math.random() * 600);
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', () => window.app = new App());
     </script>
 </body>
