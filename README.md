@@ -15,15 +15,14 @@
 | -------- | ------------------------------------------------------- | ------------- | ------------ |
 | **P0**   | Fix sensor electronics (multiple piezos not triggering) | 🔴 Blocked     | TBD          |
 | **P1**   | Complete harp/tent construction                         | 🟡 In Progress | Team         |
-| **P1**   | Finalize soundscape approach                            | 🟡 Deciding    | Lilian       |
+| **P1**   | Finalize web app redesign (V3.1)                        | ✅ Complete    | Vincent      |
 | **P2**   | Stakeholder outreach for materials                      | 📋 Planned     | Mate/Vincent |
 | **P3**   | Guerilla action (playground/atrium install)             | ⏸️ Parked      | —            |
 
 ### 🎯 Open Decisions
 
-1. **Soundscape Philosophy:** Triggered sounds (original) vs. continuous "Klangteppich" (calming drones triggered by first movement)?
-2. **Harp Sound Character:** Monochord-inspired (meditative, [reference](https://youtu.be/c1aCNMIZ5lM)) vs. melodic plucking?
-3. **Presentation Framing:** How to differentiate Abschlusspräsentation (theoretical/artsy) from Ausstellung (practical)?
+1. **Presentation Framing:** How to differentiate Abschlusspräsentation (theoretical/artsy) from Ausstellung (practical)?
+2. **Harp Sensor Placement:** How many piezos and where on the vertical strings?
 
 ## 🏛️ Concept & Design
 
@@ -166,20 +165,20 @@ The load-bearing rope knots must be verified by someone with rigging experience 
 
 **Why Web-Based:** Zero install, cross-platform, easy iteration, visual + audio unified.
 
-**Files:** `index.html` (main app), `midi-debug.html` (hardware testing)
+**Files:** `index.html` (V3.1 - production app with dual sound systems & debug panel)
 
 ## 🎵 Sound Design
 
-### Soundscape Philosophy (Open Decision)
+### Soundscape Philosophy (RESOLVED)
 
-Two approaches under consideration:
+**Hybrid Approach:** Discrete note triggers with extended sustain create overlapping "Klangteppich" (sound carpet)
 
-| Approach                 | Description                                           | Pros                                                | Cons                           |
-| ------------------------ | ----------------------------------------------------- | --------------------------------------------------- | ------------------------------ |
-| **Triggered (original)** | Each movement triggers a discrete sound               | Interactive, responsive                             | Calming sounds need continuity |
-| **Klangteppich (new)**   | First movement triggers continuous ambient soundscape | Better for calming (white/brown noise, alpha waves) | Less interactive feel          |
+| Zone               | Strategy                                                     | Result                                               |
+| ------------------ | ------------------------------------------------------------ | ---------------------------------------------------- |
+| **Web (2 sensors)** | Discrete triggers with 8-15s release                         | Overlapping notes create continuous ambient drone    |
+| **Harp (1 sensor)** | Shorter notes (2-4s release) with brighter harmonics         | Clear feedback for intentional plucking              |
 
-**Potential hybrid:** Harp = triggered (monochord-like), Net = Klangteppich (ambient carpet activated by first contact).
+**Design Rationale:** People need immediate feedback (discrete impulse) to feel their agency, but the long release times cause notes to overlap and blend into a continuous soundscape. This satisfies both interaction (responsiveness) and restoration (ambient calm).
 
 ### The "Guaranteed Pleasant" Strategy
 
@@ -198,16 +197,15 @@ Two approaches under consideration:
 | Eno Drones – Ambient | Slow swells, washy        |
 | A♭m7 – Melancholic   | Minor 7th, introspective  |
 
-### Recommended Note Map (C Major 9)
+### Note Mapping (Sanctuary Preset)
 
-| Sensor | Role    | MIDI | Note |
-| ------ | ------- | ---- | ---- |
-| 1      | Bass    | 36   | C2   |
-| 2      | Fifth   | 43   | G2   |
-| 3      | Tenor   | 52   | E3   |
-| 4      | Alto    | 59   | B3   |
-| 5      | Soprano | 62   | D4   |
-| 6      | Air     | 67   | G4   |
+| Sensor | Zone        | MIDI | Note | Keyboard | Release Time |
+| ------ | ----------- | ---- | ---- | -------- | ------------ |
+| 0      | Web 1       | 60   | C4   | 1        | 12s          |
+| 1      | Web 2       | 62   | D4   | 2        | 12s          |
+| 2      | Harp        | 64   | E4   | 3        | 4s           |
+
+**MIDI Testing:** Notes C, D, E (60, 62, 64) map to sensors 0-2 respectively
 
 ## 📋 Stakeholder Outreach
 
@@ -241,10 +239,14 @@ Two approaches under consideration:
 ### Quick Start
 
 1. **Open** `index.html` in Chrome
-2. **Click** overlay to enable audio
-3. **Play** with keys `1-6` or connect MIDI hardware
+2. **Click** anywhere to enable audio (Web Audio API requirement)
+3. **Play** with keys `1-6` or toggle Auto-Play
 
-**Without hardware:** Press `1-6` on keyboard, or click "Start Auto-Play".
+**Controls:**
+- **Keys 1-2:** Trigger web sensors (random velocity)
+- **Key 3:** Trigger harp sensor (random velocity)
+- **Mouse drag:** Rotate 3D camera
+- **Auto-Play:** Simulates realistic interaction patterns
 
 ### MIDI Setup
 
@@ -252,13 +254,17 @@ Two approaches under consideration:
 
 **Windows:** Native BLE MIDI not supported. Use USB MIDI, or loopMIDI + MIDIberry (free), or BOME ($29).
 
-### Controls
+### Interface Features (V3.1)
 
-| Input     | Action              |
-| --------- | ------------------- |
-| Keys 1-6  | Trigger sensors 0-5 |
-| Left-drag | Rotate camera       |
-| Scroll    | Zoom                |
+| Feature              | Description                                                |
+| -------------------- | ---------------------------------------------------------- |
+| **Active Voices**    | Real-time envelope visualization for all 3 sensors         |
+| **3D Visualization** | Accurate tent topology with color-coded zones              |
+| **Preset Switcher**  | Independent Web (6) and Harp (6) soundscape selectors      |
+| **Debug Panel**      | Collapsible footer with MIDI logs, configs, and synth params |
+| **Auto-Play Mode**   | Simulates realistic usage patterns for testing             |
+| **Event Log**        | Timestamped sensor triggers (moved to debug panel)         |
+| **MIDI Support**     | Automatic detection and note-to-sensor mapping             |
 
 ## 📅 Timeline & Phases
 

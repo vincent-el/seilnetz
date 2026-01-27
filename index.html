@@ -1,841 +1,884 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seilnetz V2.2: The Sonic Web</title>
-
-    <!-- CDN Dependencies -->
+    <title>Seilnetz V3.0: Sonic Web + Harp</title>
     <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/gsap@3.12.2/dist/gsap.min.js"></script>
-
     <style>
-        :root {
-            --bg: #f5f5f5;
-            --panel-bg: rgba(255, 255, 255, 0.95);
-            --text: #222;
-            --text-muted: #666;
-            --accent: #d4a017;
-            /* Yellow */
-            --glow: #cc2936;
-            /* Red */
-            --success: #2ecc71;
-            --border: #ddd;
-            --debug-bg: #1a1a1a;
-            --debug-text: #0f0;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
             font-family: 'SF Mono', 'Menlo', monospace;
-            background: var(--bg);
-            color: var(--text);
+            background: #1a1a1a;
+            color: #f5f5f5;
             overflow: hidden;
             height: 100vh;
-            width: 100vw;
         }
 
-        /* === 3D CANVAS === */
-        #canvas-container {
+        #canvas { 
+            position: fixed; 
+            inset: 0; 
+            z-index: 0; 
+        }
+
+        #ui {
             position: fixed;
-            inset: 0;
-            z-index: 0;
-        }
-
-        /* === UI SIDEBAR === */
-        #ui-layer {
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: 10;
-            display: flex;
-            justify-content: flex-end;
-        }
-
-        #panel {
-            width: 340px;
-            height: 100%;
-            background: var(--panel-bg);
+            top: 20px;
+            right: 20px;
+            width: 380px;
+            background: rgba(30, 30, 30, 0.95);
             backdrop-filter: blur(20px);
-            border-left: 1px solid var(--border);
+            border: 1px solid #333;
+            border-radius: 8px;
             padding: 20px;
-            pointer-events: auto;
+            z-index: 10;
+            max-height: calc(100vh - 40px);
             overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            box-shadow: -5px 0 20px rgba(0, 0, 0, 0.05);
         }
 
         h1 {
             font-size: 1rem;
-            color: var(--glow);
-            margin: 0 0 20px 0;
-            padding-bottom: 10px;
-            border-bottom: 2px solid var(--glow);
+            color: #d4a017;
+            margin-bottom: 20px;
             text-transform: uppercase;
-            letter-spacing: 3px;
-        }
-
-        section {
-            margin-bottom: 24px;
+            letter-spacing: 2px;
+            border-bottom: 2px solid #d4a017;
+            padding-bottom: 10px;
         }
 
         h2 {
             font-size: 0.7rem;
-            color: var(--text-muted);
+            color: #888;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin: 0 0 10px 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            margin: 20px 0 10px 0;
         }
 
-        /* Status LEDs */
-        .status-row {
+        .status {
             display: flex;
+            gap: 8px;
             align-items: center;
+            margin-bottom: 8px;
             font-size: 0.8rem;
-            margin-bottom: 6px;
         }
 
         .led {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: #ccc;
-            margin-right: 10px;
+            background: #333;
             transition: all 0.3s;
         }
 
-        .led.on {
-            background: var(--success);
-            box-shadow: 0 0 10px var(--success);
+        .led.on { 
+            background: #0f0; 
+            box-shadow: 0 0 10px #0f0; 
         }
 
-        /* Controls */
-        button {
+        button, select {
             width: 100%;
             padding: 10px;
-            background: var(--text);
-            color: white;
-            border: none;
+            margin-bottom: 8px;
+            background: #2a2a2a;
+            color: #f5f5f5;
+            border: 1px solid #444;
             font-family: inherit;
             font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
             cursor: pointer;
             transition: all 0.2s;
-            margin-bottom: 8px;
         }
 
-        button:hover {
-            background: #444;
-        }
+        button:hover { background: #3a3a3a; }
+        button.active { background: #d4a017; color: #000; }
 
-        button.active {
-            background: var(--accent);
-            color: #000;
-        }
-
-        button.secondary {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text);
-        }
-
-        button.secondary:hover {
-            background: #eee;
-        }
-
-        select {
+        #voices-canvas {
             width: 100%;
-            padding: 8px;
-            font-family: inherit;
-            font-size: 0.8rem;
-            border: 1px solid var(--border);
-            background: white;
-            margin-bottom: 12px;
+            height: 180px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            margin: 10px 0;
         }
 
-        /* === SOUNDSCAPE VISUALIZER === */
-        #adsr-canvas {
-            width: 100%;
-            height: 100px;
-            background: #fff;
-            border: 1px solid var(--border);
-            margin-bottom: 8px;
-        }
-
-        .param-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            font-size: 0.7rem;
-            color: var(--text-muted);
-        }
-
-        .param-value {
-            color: var(--text);
-            font-weight: bold;
-            float: right;
-        }
-
-        /* === LOG === */
         #log {
-            flex: 1;
-            min-height: 100px;
-            background: #fff;
-            border: 1px solid var(--border);
+            background: #0a0a0a;
+            border: 1px solid #333;
             padding: 10px;
-            font-size: 0.65rem;
+            height: 120px;
             overflow-y: auto;
-            color: var(--text-muted);
+            font-size: 0.65rem;
+            color: #888;
         }
 
-        .log-entry {
-            margin-bottom: 2px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 2px;
-        }
-
-        .log-time {
-            opacity: 0.5;
-            margin-right: 5px;
-        }
-
-        /* === LABELS === */
-        .node-label {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 4px 8px;
-            border-radius: 4px;
+        .info {
             font-size: 0.7rem;
-            font-family: var(--mono);
-            pointer-events: none;
-            border: 1px solid var(--accent);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            transform: translate(-50%, -100%);
-            margin-top: -15px;
-            white-space: nowrap;
-            opacity: 0;
-            transition: opacity 0.3s;
+            color: #666;
+            margin-top: 10px;
+            line-height: 1.4;
         }
 
-        .node-label.visible {
-            opacity: 1;
+        .key { 
+            color: #d4a017; 
+            font-weight: bold; 
         }
 
-        .node-label strong {
-            color: var(--glow);
-        }
-
-        /* === DEBUG FOOTER === */
-        #debug-footer {
+        /* === DEBUG PANEL === */
+        #debug-panel {
             position: fixed;
             bottom: 0;
             left: 0;
-            width: calc(100% - 340px);
-            /* Subtract panel width */
-            background: var(--debug-bg);
-            color: #eee;
-            border-top: 2px solid var(--accent);
-            transform: translateY(100%);
+            right: 0;
+            background: rgba(20, 20, 20, 0.98);
+            border-top: 2px solid #333;
+            z-index: 100;
             transition: transform 0.3s ease;
-            z-index: 20;
-            display: flex;
-            flex-direction: column;
-            height: 300px;
+            font-family: inherit;
         }
 
-        #debug-footer.open {
-            transform: translateY(0);
+        #debug-panel.debug-collapsed {
+            transform: translateY(calc(100% - 40px));
         }
 
-        .debug-header {
-            padding: 8px 16px;
-            background: #333;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #444;
+        #debug-toggle {
+            width: 100px;
+            position: absolute;
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 20, 0.98);
+            border: 2px solid #333;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            padding: 8px;
+            cursor: pointer;
+            color: #d4a017;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 101;
         }
 
-        .debug-content {
+        #debug-content {
             display: grid;
-            grid-template-columns: 250px 1fr;
-            height: 100%;
-            overflow: hidden;
-        }
-
-        .debug-sidebar {
-            padding: 16px;
-            border-right: 1px solid #444;
-            background: #222;
-            font-size: 0.8rem;
-        }
-
-        .debug-log {
-            padding: 16px;
-            font-family: 'Monaco', monospace;
-            font-size: 0.75rem;
-            color: var(--debug-text);
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            max-height: 400px;
             overflow-y: auto;
-            background: #111;
+        }
+
+        .debug-section {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            padding: 15px;
+            border-radius: 4px;
+        }
+
+        .debug-section h3 {
+            font-size: 0.7rem;
+            color: #d4a017;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .debug-stat {
-            margin-bottom: 8px;
             display: flex;
             justify-content: space-between;
-        }
-
-        .debug-toggle {
-            position: fixed;
-            bottom: 10px;
-            left: 10px;
-            z-index: 30;
-            background: var(--debug-bg);
-            color: #fff;
-            border: 1px solid var(--border);
-            padding: 5px 10px;
             font-size: 0.7rem;
-            border-radius: 4px;
-            cursor: pointer;
-            width: auto;
+            margin-bottom: 6px;
+            color: #888;
         }
 
-        /* === OVERLAY === */
-        #overlay {
+        .debug-stat span:last-child {
+            color: #0f0;
+            font-family: monospace;
+        }
+
+        .debug-log, #dbg-preset-config {
+            background: #000;
+            padding: 10px;
+            font-size: 0.6rem;
+            font-family: monospace;
+            color: #0f0;
+            max-height: 180px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            border: 1px solid #222;
+        }
+
+        #labels-container {
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            cursor: pointer;
-            transition: opacity 0.5s;
+            pointer-events: none;
+            z-index: 5;
         }
 
-        #overlay h1 {
-            color: white;
-            border: none;
-            font-size: 2rem;
+        .node-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: #d4a017;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            border: 1px solid #333;
+            white-space: nowrap;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .node-label.hidden {
+            opacity: 0;
         }
     </style>
 </head>
-
 <body>
+    <div id="canvas"></div>
+    
+    <div id="ui">
+        <h1>🕸️ Seilnetz V3.1</h1>
+        
+        <h2>Status</h2>
+        <div class="status">
+            <div id="led-audio" class="led"></div>
+            <span>Audio Engine</span>
+        </div>
+        <div class="status">
+            <div id="led-midi" class="led"></div>
+            <span id="midi-status">No MIDI</span>
+        </div>
 
-    <div id="overlay">
-        <h1>🕸️ SEILNETZ</h1>
-        <p>Click anywhere to enter</p>
+        <h2>Soundscape</h2>
+        <div style="margin-bottom: 15px;">
+            <label style="font-size: 0.65rem; color: #888; text-transform: uppercase; display: block; margin-bottom: 4px;">Web</label>
+            <select id="web-preset">
+                <option value="ambient_drone">Ambient Drone</option>
+                <option value="warm_pad">Warm Pad</option>
+                <option value="deep_bass">Deep Bass</option>
+                <option value="bright_shimmer">Bright Shimmer</option>
+                <option value="dark_pulse">Dark Pulse</option>
+                <option value="crystal_bells">Crystal Bells</option>
+            </select>
+
+            <label style="font-size: 0.65rem; color: #888; text-transform: uppercase; display: block; margin-bottom: 4px;">Harp</label>
+            <select id="harp-preset">
+                <option value="monochord">Monochord</option>
+                <option value="plucked_strings">Plucked Strings</option>
+                <option value="bell_tones">Bell Tones</option>
+                <option value="soft_mallets">Soft Mallets</option>
+                <option value="aggressive_hits">Aggressive Hits</option>
+                <option value="ethereal_bow">Ethereal Bow</option>
+            </select>
+        </div>
+
+        <h2>Active Voices</h2>
+        <canvas id="voices-canvas"></canvas>
+
+        <h2>Controls</h2>
+        <button id="btn-toggle-labels">Show/Hide Labels</button>
+        <button id="btn-autoplay">Toggle Auto-Play</button>
+
+        <div class="info">
+            <strong>Keyboard:</strong> 
+            <span class="key">1-2</span> = Web, 
+            <span class="key">3</span> = Harp<br>
+            <strong>Mouse:</strong> Drag to rotate<br>
+            <strong>Debug:</strong> Toggle footer panel
+        </div>
     </div>
 
-    <div id="canvas-container"></div>
-    <div id="labels-container"></div>
-
-    <button id="debug-toggle" class="debug-toggle">🛠️ Debug Console</button>
-
-    <div id="debug-footer">
-        <div class="debug-header">
-            <span>Hardware Diagnostics</span>
-            <button onclick="app.debug.clear()" style="width: auto; padding: 4px 8px; margin: 0;">Clear Log</button>
-        </div>
-        <div class="debug-content">
-            <div class="debug-sidebar">
-                <div class="debug-stat"><span>API Status:</span> <span id="dbg-api">Checking...</span></div>
-                <div class="debug-stat"><span>Inputs:</span> <span id="dbg-inputs">0</span></div>
-                <div class="debug-stat"><span>Last Msg:</span> <span id="dbg-last">-</span></div>
-                <div class="debug-stat" style="margin-top: 20px; color: #888;">
-                    MIDI Channel → Sensor Mapping:<br>
-                    Ch 1 → Sensor 0<br>
-                    Ch 2 → Sensor 1<br>
-                    ...<br>
-                    Ch 6 → Sensor 5
-                </div>
+    <div id="debug-panel" class="debug-collapsed">
+        <button id="debug-toggle">DEBUG ▲</button>
+        <div id="debug-content">
+            <div class="debug-section">
+                <h3>MIDI Diagnostics</h3>
+                <div class="debug-stat"><span>API:</span> <span id="dbg-midi-api">-</span></div>
+                <div class="debug-stat"><span>Device:</span> <span id="dbg-midi-device">-</span></div>
+                <div class="debug-stat"><span>Last Msg:</span> <span id="dbg-midi-last">-</span></div>
+                <div id="midi-log" class="debug-log">Waiting for MIDI...</div>
             </div>
-            <div id="raw-midi-log" class="debug-log">Waiting for MIDI...</div>
-        </div>
-    </div>
-
-    <div id="ui-layer">
-        <div id="panel">
-            <h1>🕸️ Seilnetz</h1>
-
-            <section>
-                <h2>Status</h2>
-                <div class="status-row">
-                    <div id="led-audio" class="led"></div>
-                    <span>Audio Engine</span>
-                </div>
-                <div class="status-row">
-                    <div id="led-midi" class="led"></div>
-                    <span id="midi-name">No MIDI Device</span>
-                </div>
-            </section>
-
-            <section>
-                <h2>Visualization</h2>
-                <button id="btn-labels" class="secondary active">Show Labels</button>
-            </section>
-
-            <section>
-                <h2>Soundscape</h2>
-                <select id="preset-select">
-                    <option value="safe">CMaj9 – Safe & Warm</option>
-                    <option value="bright">Pentatonic – Bright</option>
-                    <option value="eno">Eno Drones – Ambient</option>
-                    <option value="abm7">A♭m7 – Melancholic</option>
-                    <option value="cbmaj7">C♭maj7 – Ethereal</option>
-                    <option value="chaos">Chaos – 5 + Screech</option>
-                </select>
-
-                <canvas id="adsr-canvas" width="300" height="100"></canvas>
-                <div class="param-grid" id="sound-params">
-                    <!-- Filled by JS -->
-                </div>
-            </section>
-
-            <section>
-                <h2>Simulation</h2>
-                <button id="btn-auto">Start Auto-Play</button>
-            </section>
-
-            <section style="flex: 1; display: flex; flex-direction: column;">
-                <h2>
-                    Event Log
-                    <span style="font-size: 0.6rem; cursor: pointer;" onclick="app.clearLog()">CLEAR</span>
-                </h2>
-                <div id="log"></div>
-            </section>
+            
+            <div class="debug-section">
+                <h3>Preset Config</h3>
+                <pre id="dbg-preset-config" style="height: 180px;"></pre>
+            </div>
+            
+            <div class="debug-section">
+                <h3>Synth Params</h3>
+                <div id="dbg-synth-params" class="debug-log" style="height: 180px;"></div>
+            </div>
+            
+            <div class="debug-section">
+                <h3>Voice States</h3>
+                <div id="dbg-voice-states" class="debug-log" style="height: 180px;"></div>
+            </div>
+            
+            <div class="debug-section">
+                <h3>Event Log</h3>
+                <div id="log" class="debug-log" style="height: 180px;"></div>
+            </div>
         </div>
     </div>
 
     <script>
-        /**
-         * SEILNETZ V2.2
-         * Integrated Soundscape Visualizer & Debug Console
-         */
-
-        // === CONFIGURATION ===
-        const PRESETS = {
-            safe: {
-                name: 'CMaj9 Safe',
-                notes: [36, 43, 52, 59, 62, 67],
-                envelope: { attack: 0.3, decay: 0.2, sustain: 0.6, release: 4 },
+        // ===== CONFIGURATION =====
+        const WEB_PRESETS = {
+            ambient_drone: {
+                name: 'Ambient Drone',
+                notes: [36, 43, 52, 59],  // C2, G2, E3, B3
+                envelope: { attack: 1.2, decay: 0.5, sustain: 0.7, release: 12 },
                 oscillator: 'sine',
-                filterFreq: 3000,
-                reverbWet: 0.5
+                filter: 2000,
+                reverb: 0.8
             },
-            bright: {
-                name: 'Pentatonic Bright',
-                notes: [60, 62, 64, 67, 69, 72],
-                envelope: { attack: 0.1, decay: 0.1, sustain: 0.8, release: 2 },
+            warm_pad: {
+                name: 'Warm Pad',
+                notes: [48, 52, 55, 59],  // C3, E3, G3, B3
+                envelope: { attack: 0.8, decay: 0.4, sustain: 0.8, release: 10 },
                 oscillator: 'triangle',
-                filterFreq: 8000,
-                reverbWet: 0.3
+                filter: 3000,
+                reverb: 0.6
             },
-            eno: {
-                name: 'Eno Drones',
-                notes: [36, 52, 55, 59, 64, 71],
-                envelope: { attack: 2, decay: 0.5, sustain: 0.8, release: 12 },
+            deep_bass: {
+                name: 'Deep Bass',
+                notes: [28, 35, 40, 47],  // E1, B1, E2, B2
+                envelope: { attack: 2, decay: 1, sustain: 0.6, release: 15 },
                 oscillator: 'sine',
-                filterFreq: 3000,
-                reverbWet: 0.9
+                filter: 1500,
+                reverb: 0.9
             },
-            abm7: {
-                name: 'A♭m7 – Melancholic',
-                notes: [44, 48, 51, 54, 56, 60],
-                envelope: { attack: 0.1, decay: 0.1, sustain: 0.8, release: 2 },
+            bright_shimmer: {
+                name: 'Bright Shimmer',
+                notes: [60, 64, 67, 71],  // C4, E4, G4, B4
+                envelope: { attack: 0.3, decay: 0.2, sustain: 0.9, release: 6 },
                 oscillator: 'triangle',
-                filterFreq: 8000,
-                reverbWet: 0.3
+                filter: 6000,
+                reverb: 0.4
             },
-            cbmaj7: {
-                name: 'C♭maj7 – Ethereal',
-                notes: [35, 39, 42, 47, 51, 58],
-                envelope: { attack: 0.1, decay: 0.1, sustain: 0.8, release: 2 },
+            dark_pulse: {
+                name: 'Dark Pulse',
+                notes: [39, 44, 49, 54],  // D#2, G#2, C#3, F#3
+                envelope: { attack: 0.5, decay: 0.6, sustain: 0.5, release: 8 },
+                oscillator: 'sine',
+                filter: 1800,
+                reverb: 0.7
+            },
+            crystal_bells: {
+                name: 'Crystal Bells',
+                notes: [72, 76, 79, 83],  // C5, E5, G5, B5
+                envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 5 },
                 oscillator: 'triangle',
-                filterFreq: 8000,
-                reverbWet: 0.3
-            },
-            chaos: {
-                name: 'Chaos + Screech',
-                notes: [48, 52, 55, 59, 62, 96],
-                envelope: { attack: 0.01, decay: 0.1, sustain: 1, release: 0.5 },
-                oscillator: 'square',
-                filterFreq: 10000,
-                reverbWet: 0.2
+                filter: 8000,
+                reverb: 0.5
             }
         };
 
-        // Flat "Web" Topology
-        const RADIUS = 3.5;
-        const NODE_POSITIONS = [{ x: 0, y: 0, z: 0 }]; // Center
-        for (let i = 0; i < 5; i++) {
-            const angle = (i / 5) * Math.PI * 2;
-            NODE_POSITIONS.push({
-                x: Math.cos(angle) * RADIUS,
-                y: 0,
-                z: Math.sin(angle) * RADIUS
-            });
-        }
+        const HARP_PRESETS = {
+            monochord: {
+                name: 'Monochord',
+                notes: [62, 67],  // D4, G4
+                envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 4 },
+                oscillator: 'triangle',
+                filter: 5000,
+                reverb: 0.5
+            },
+            plucked_strings: {
+                name: 'Plucked Strings',
+                notes: [64, 69],  // E4, A4
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 2 },
+                oscillator: 'triangle',
+                filter: 6000,
+                reverb: 0.3
+            },
+            bell_tones: {
+                name: 'Bell Tones',
+                notes: [60, 67],  // C4, G4
+                envelope: { attack: 0.02, decay: 0.5, sustain: 0.2, release: 6 },
+                oscillator: 'triangle',
+                filter: 7000,
+                reverb: 0.6
+            },
+            soft_mallets: {
+                name: 'Soft Mallets',
+                notes: [55, 62],  // G3, D4
+                envelope: { attack: 0.1, decay: 0.4, sustain: 0.4, release: 3 },
+                oscillator: 'sine',
+                filter: 4000,
+                reverb: 0.4
+            },
+            aggressive_hits: {
+                name: 'Aggressive Hits',
+                notes: [48, 60],  // C3, C4
+                envelope: { attack: 0.005, decay: 0.1, sustain: 0.6, release: 1.5 },
+                oscillator: 'square',
+                filter: 8000,
+                reverb: 0.2
+            },
+            ethereal_bow: {
+                name: 'Ethereal Bow',
+                notes: [68, 75],  // G#4, D#5
+                envelope: { attack: 0.5, decay: 0.6, sustain: 0.7, release: 8 },
+                oscillator: 'sine',
+                filter: 5500,
+                reverb: 0.8
+            }
+        };
 
-        // === EVENT BUS ===
+        // MIDI Note Mapping (for testing with keyboard/controllers)
+        const NOTE_MAP = { 60: 0, 62: 1, 64: 2 }; // C, D, E
+
+        // 3D Positions
+        const WEB_NODES = [
+            { x: -1.5, y: 0.5, z: 0, label: 'Web 1' },
+            { x: 1.5, y: 0.5, z: 0, label: 'Web 2' }
+        ];
+
+        const HARP_NODES = [
+            { x: 0, y: 2, z: -1, label: 'Harp' }
+        ];
+
+        const ALL_NODES = [...WEB_NODES, ...HARP_NODES];
+
+        // ===== EVENT BUS =====
         class Bus {
             constructor() { this.subs = {}; }
             on(e, fn) { (this.subs[e] ||= []).push(fn); }
             emit(e, d) { this.subs[e]?.forEach(fn => fn(d)); }
         }
 
-        // === SOUNDSCAPE VISUALIZER ===
-        class SoundscapeViz {
-            constructor(canvasId, paramsId) {
-                this.canvas = document.getElementById(canvasId);
-                this.ctx = this.canvas.getContext('2d');
-                this.paramsEl = document.getElementById(paramsId);
-            }
-
-            draw(preset) {
-                const { width, height } = this.canvas;
-                const ctx = this.ctx;
-                const env = preset.envelope;
-
-                // Clear
-                ctx.clearRect(0, 0, width, height);
-                ctx.fillStyle = '#fafafa';
-                ctx.fillRect(0, 0, width, height);
-
-                // Calc points
-                const totalTime = env.attack + env.decay + 1 + env.release; // 1s sustain for viz
-                const timeScale = width / Math.min(totalTime, 5); // Cap visual width
-
-                const attackX = env.attack * timeScale;
-                const decayX = attackX + (env.decay * timeScale);
-                const sustainX = decayX + (1 * timeScale);
-                const releaseX = sustainX + (env.release * timeScale);
-
-                const sustainY = height - (env.sustain * height * 0.8);
-                const peakY = height * 0.1;
-                const baseY = height;
-
-                // Draw Curve
-                ctx.beginPath();
-                ctx.moveTo(0, baseY);
-                ctx.lineTo(attackX, peakY); // Attack
-                ctx.lineTo(decayX, sustainY); // Decay
-                ctx.lineTo(sustainX, sustainY); // Sustain
-                ctx.lineTo(releaseX, baseY); // Release
-
-                ctx.strokeStyle = '#d4a017';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-
-                ctx.fillStyle = 'rgba(212, 160, 23, 0.1)';
-                ctx.fill();
-
-                // Waveform Icon
-                this.drawWaveform(preset.oscillator, width - 30, 20);
-
-                // Update Params Text
-                this.paramsEl.innerHTML = `
-            <div>Attack <span class="param-value">${env.attack}s</span></div>
-            <div>Release <span class="param-value">${env.release}s</span></div>
-            <div>Wave <span class="param-value">${preset.oscillator}</span></div>
-            <div>Reverb <span class="param-value">${preset.reverbWet * 100}%</span></div>
-        `;
-            }
-
-            drawWaveform(type, x, y) {
-                const ctx = this.ctx;
-                ctx.beginPath();
-                ctx.strokeStyle = '#666';
-                ctx.lineWidth = 1.5;
-
-                if (type === 'sine') {
-                    ctx.moveTo(x, y);
-                    ctx.bezierCurveTo(x + 5, y - 10, x + 10, y + 10, x + 15, y);
-                } else if (type === 'square') {
-                    ctx.moveTo(x, y);
-                    ctx.lineTo(x, y - 8);
-                    ctx.lineTo(x + 7, y - 8);
-                    ctx.lineTo(x + 7, y + 8);
-                    ctx.lineTo(x + 15, y + 8);
-                    ctx.lineTo(x + 15, y);
-                } else if (type === 'triangle') {
-                    ctx.moveTo(x, y);
-                    ctx.lineTo(x + 7, y - 10);
-                    ctx.lineTo(x + 15, y);
-                }
-                ctx.stroke();
-            }
-        }
-
-        // === DEBUGGER ===
-        class Debugger {
-            constructor() {
-                this.el = {
-                    footer: document.getElementById('debug-footer'),
-                    toggle: document.getElementById('debug-toggle'),
-                    log: document.getElementById('raw-midi-log'),
-                    api: document.getElementById('dbg-api'),
-                    inputs: document.getElementById('dbg-inputs'),
-                    last: document.getElementById('dbg-last')
-                };
-
-                this.isOpen = false;
-                this.el.toggle.onclick = () => this.toggle();
-
-                // Check API immediately
-                if (navigator.requestMIDIAccess) {
-                    this.el.api.textContent = "Available";
-                    this.el.api.style.color = "#0f0";
-                } else {
-                    this.el.api.textContent = "Not Supported";
-                    this.el.api.style.color = "#f00";
-                }
-            }
-
-            toggle() {
-                this.isOpen = !this.isOpen;
-                this.el.footer.classList.toggle('open', this.isOpen);
-                this.el.toggle.classList.toggle('active', this.isOpen);
-            }
-
-            log(msg) {
-                const line = document.createElement('div');
-                line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-                this.el.log.prepend(line);
-                if (this.el.log.children.length > 50) this.el.log.lastChild.remove();
-                this.el.last.textContent = msg;
-            }
-
-            updateInputs(count) {
-                this.el.inputs.textContent = count;
-            }
-
-            clear() {
-                this.el.log.innerHTML = '';
-            }
-        }
-
-        // === AUDIO ENGINE ===
-        class Audio {
-            constructor(bus, viz) {
+        // ===== AUDIO ENGINE =====
+        class AudioEngine {
+            constructor(bus) {
                 this.bus = bus;
-                this.viz = viz;
-                this.synth = null;
-                this.filter = null;
-                this.reverb = null;
-                this.preset = PRESETS.safe;
+                this.webSynth = null;
+                this.harpSynth = null;
+                this.filters = { web: null, harp: null };
+                this.reverbs = { web: null, harp: null };
+                this.webPreset = WEB_PRESETS.ambient_drone;
+                this.harpPreset = HARP_PRESETS.monochord;
                 this.ready = false;
+                this.activeVoices = new Array(3).fill(null).map(() => ({ 
+                    active: false, 
+                    startTime: 0, 
+                    duration: 0,
+                    note: null 
+                }));
 
                 bus.on('trigger', d => this.play(d.sensor, d.velocity));
-                bus.on('preset', name => this.setPreset(name));
-
-                // Initial Draw
-                this.viz.draw(this.preset);
+                bus.on('web-preset', name => this.setWebPreset(name));
+                bus.on('harp-preset', name => this.setHarpPreset(name));
             }
 
             async init() {
                 await Tone.start();
-                this.synth = new Tone.PolySynth(Tone.Synth, { maxPolyphony: 8 });
-                this.filter = new Tone.Filter(3000, 'lowpass');
-                this.reverb = new Tone.Reverb({ decay: 8, wet: 0.5 });
-                this.synth.chain(this.filter, this.reverb, Tone.Destination);
+                
+                // Web synth (4 voices)
+                this.webSynth = new Tone.PolySynth(Tone.Synth, { maxPolyphony: 4 });
+                this.filters.web = new Tone.Filter(2000, 'lowpass');
+                this.reverbs.web = new Tone.Reverb({ decay: 8, wet: 0.5 });
+                this.webSynth.chain(this.filters.web, this.reverbs.web, Tone.Destination);
+
+                // Harp synth (2 voices)
+                this.harpSynth = new Tone.PolySynth(Tone.Synth, { maxPolyphony: 2 });
+                this.filters.harp = new Tone.Filter(5000, 'lowpass');
+                this.reverbs.harp = new Tone.Reverb({ decay: 4, wet: 0.3 });
+                this.harpSynth.chain(this.filters.harp, this.reverbs.harp, Tone.Destination);
+
                 this.applyPreset();
                 this.ready = true;
+                this.bus.emit('audio-ready');
             }
 
-            setPreset(name) {
-                this.preset = PRESETS[name] || PRESETS.safe;
-                this.viz.draw(this.preset); // Update visualizer
+            setWebPreset(name) {
+                this.webPreset = WEB_PRESETS[name] || WEB_PRESETS.ambient_drone;
+                if (this.ready) this.applyPreset();
+            }
+
+            setHarpPreset(name) {
+                this.harpPreset = HARP_PRESETS[name] || HARP_PRESETS.monochord;
                 if (this.ready) this.applyPreset();
             }
 
             applyPreset() {
-                const p = this.preset;
-                this.synth.set({
-                    oscillator: { type: p.oscillator },
-                    envelope: p.envelope
+                const web = this.webPreset;
+                const harp = this.harpPreset;
+                
+                this.webSynth.set({
+                    oscillator: { type: web.oscillator },
+                    envelope: web.envelope
                 });
-                this.filter.frequency.value = p.filterFreq;
-                this.reverb.wet.value = p.reverbWet;
+                this.filters.web.frequency.value = web.filter;
+                this.reverbs.web.wet.value = web.reverb;
+
+                this.harpSynth.set({
+                    oscillator: { type: harp.oscillator },
+                    envelope: harp.envelope
+                });
+                this.filters.harp.frequency.value = harp.filter;
+                this.reverbs.harp.wet.value = harp.reverb;
             }
 
             play(sensor, velocity) {
                 if (!this.ready) return;
-                const note = this.preset.notes[sensor % this.preset.notes.length];
-                const noteName = Tone.Frequency(note, 'midi').toNote();
-                const vol = velocity / 127;
-                this.synth.triggerAttack(noteName, Tone.now(), vol);
-                const holdTime = this.preset.envelope.attack + 0.1;
-                this.synth.triggerRelease(noteName, Tone.now() + holdTime);
+
+                const isHarp = sensor >= 2;
+                const synth = isHarp ? this.harpSynth : this.webSynth;
+                const config = isHarp ? this.harpPreset : this.webPreset;
+                const noteIndex = isHarp ? sensor - 2 : sensor;
+                const midiNote = config.notes[noteIndex % config.notes.length];
+                const noteName = Tone.Frequency(midiNote, 'midi').toNote();
+                const volume = velocity / 127;
+
+                // Trigger
+                synth.triggerAttack(noteName, Tone.now(), volume);
+                const holdTime = config.envelope.attack + 0.1;
+                synth.triggerRelease(noteName, Tone.now() + holdTime);
+
+                // Track voice for visualization
+                const totalDuration = config.envelope.attack + config.envelope.decay + config.envelope.release + 1;
+                this.activeVoices[sensor] = {
+                    active: true,
+                    startTime: Date.now(),
+                    duration: totalDuration * 1000,
+                    note: noteName,
+                    envelope: config.envelope
+                };
+
+                // Auto-deactivate after duration
+                setTimeout(() => {
+                    if (this.activeVoices[sensor].startTime === this.activeVoices[sensor].startTime) {
+                        this.activeVoices[sensor].active = false;
+                    }
+                }, totalDuration * 1000);
+
+                this.bus.emit('voice-update', this.activeVoices);
+            }
+
+            getActiveVoices() {
+                return this.activeVoices;
             }
         }
 
-        // === 3D VISUALIZER ===
-        class Viz {
-            constructor(container, bus) {
+        // ===== VOICE VISUALIZER =====
+        class VoiceVisualizer {
+            constructor(canvasId, bus) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.bus = bus;
+                this.voices = new Array(6).fill(null).map(() => ({ active: false }));
+                
+                bus.on('voice-update', voices => {
+                    this.voices = voices;
+                });
+
+                this.animate();
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                this.draw();
+            }
+
+            draw() {
+                const { width, height } = this.canvas;
+                const ctx = this.ctx;
+                const barHeight = height / 6;
+                const now = Date.now();
+
+                ctx.fillStyle = '#0a0a0a';
+                ctx.fillRect(0, 0, width, height);
+
+                this.voices.forEach((voice, i) => {
+                    const y = i * barHeight;
+                    const isHarp = i >= 2;
+                    const color = isHarp ? '#d4a017' : '#cc2936';
+                    const label = isHarp ? `Harp ${i - 1}` : `Web ${i + 1}`;
+
+                    // Background
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.fillRect(0, y, width, barHeight - 2);
+
+                    // Label
+                    ctx.fillStyle = '#666';
+                    ctx.font = '10px monospace';
+                    ctx.fillText(label, 8, y + 15);
+
+                    if (voice.active) {
+                        const elapsed = now - voice.startTime;
+                        const progress = Math.min(elapsed / voice.duration, 1);
+                        const env = voice.envelope;
+                        
+                        // Calculate envelope position
+                        const attackT = env.attack / (voice.duration / 1000);
+                        const decayT = (env.attack + env.decay) / (voice.duration / 1000);
+                        const sustainT = (env.attack + env.decay + 1) / (voice.duration / 1000);
+                        
+                        let amplitude = 0;
+                        if (progress < attackT) {
+                            amplitude = progress / attackT;
+                        } else if (progress < decayT) {
+                            amplitude = 1 - ((progress - attackT) / (decayT - attackT)) * (1 - env.sustain);
+                        } else if (progress < sustainT) {
+                            amplitude = env.sustain;
+                        } else {
+                            amplitude = env.sustain * (1 - (progress - sustainT) / (1 - sustainT));
+                        }
+
+                        // Bar
+                        const barWidth = width * progress;
+                        const barAlpha = Math.max(0.3, amplitude);
+                        ctx.fillStyle = color + Math.floor(barAlpha * 255).toString(16).padStart(2, '0');
+                        ctx.fillRect(0, y, barWidth, barHeight - 2);
+
+                        // Time remaining
+                        const remaining = ((voice.duration - elapsed) / 1000).toFixed(1);
+                        ctx.fillStyle = '#fff';
+                        ctx.fillText(`${remaining}s`, width - 40, y + 15);
+
+                        // Note name
+                        if (voice.note) {
+                            ctx.fillText(voice.note, 80, y + 15);
+                        }
+                    } else {
+                        // Idle
+                        ctx.fillStyle = '#444';
+                        ctx.fillText('idle', 80, y + 15);
+                    }
+                });
+            }
+        }
+
+        // ===== 3D VISUALIZER =====
+        class Visualizer {
+            constructor(containerId, bus) {
                 this.bus = bus;
                 this.nodes = [];
-                this.basePosY = [];
                 this.labels = [];
                 this.showLabels = true;
-                this.container = container;
-                this.labelsContainer = document.getElementById('labels-container');
 
-                // Scene
+                // Scene setup
                 this.scene = new THREE.Scene();
-                this.scene.background = new THREE.Color(0xf5f5f5);
+                this.scene.background = new THREE.Color(0x0a0a0a);
 
-                // Camera
                 this.camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 100);
-                this.camera.position.set(0, 6, 6);
-                this.camera.lookAt(0, 0, 0);
+                this.camera.position.set(-3, 5, 8);
+                this.camera.lookAt(0, 1, 0);
 
-                // Renderer
                 this.renderer = new THREE.WebGLRenderer({ antialias: true });
                 this.renderer.setSize(innerWidth, innerHeight);
                 this.renderer.setPixelRatio(devicePixelRatio);
-                container.appendChild(this.renderer.domElement);
+                document.getElementById(containerId).appendChild(this.renderer.domElement);
 
-                // Controls
+                // Lights
+                this.scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+                const sun = new THREE.DirectionalLight(0xffffff, 0.6);
+                sun.position.set(5, 10, 5);
+                this.scene.add(sun);
+
+                this.setupControls();
+                this.createStructure();
+                this.animate();
+
+                bus.on('trigger', d => this.pulse(d.sensor));
+                bus.on('toggle-labels', show => this.toggleLabels(show));
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            setupControls() {
                 const canvas = this.renderer.domElement;
                 let isDragging = false, prevMouse = { x: 0, y: 0 };
-                let rot = { x: 0.5, y: 0 };
+                let rot = { x: 0.7, y: -0.3 };
 
-                canvas.addEventListener('mousedown', e => { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY } });
+                canvas.addEventListener('mousedown', e => {
+                    isDragging = true;
+                    prevMouse = { x: e.clientX, y: e.clientY };
+                });
+
                 canvas.addEventListener('mousemove', e => {
                     if (!isDragging) return;
                     const dx = e.clientX - prevMouse.x;
                     const dy = e.clientY - prevMouse.y;
                     rot.y += dx * 0.005;
                     rot.x += dy * 0.005;
-                    rot.x = Math.max(0.1, Math.min(1.5, rot.x)); // Limit vertical
+                    rot.x = Math.max(0.2, Math.min(1.5, rot.x));
 
-                    // Orbit logic
-                    const dist = 8;
-                    this.camera.position.x = Math.sin(rot.y) * dist;
-                    this.camera.position.z = Math.cos(rot.y) * dist;
-                    this.camera.position.y = rot.x * 5;
-                    this.camera.lookAt(0, 0, 0);
+                    const dist = 10;
+                    this.camera.position.x = Math.sin(rot.y) * dist * Math.cos(rot.x);
+                    this.camera.position.z = Math.cos(rot.y) * dist * Math.cos(rot.x);
+                    this.camera.position.y = Math.sin(rot.x) * dist;
+                    this.camera.lookAt(0, 1, 0);
 
                     prevMouse = { x: e.clientX, y: e.clientY };
                 });
+
                 canvas.addEventListener('mouseup', () => isDragging = false);
-
-                // Lights
-                this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-                const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-                sun.position.set(5, 10, 5);
-                this.scene.add(sun);
-
-                this.createNet();
-                this.animate();
-
-                bus.on('trigger', d => this.triggerNode(d.sensor, d.velocity));
-                bus.on('toggle-labels', show => this.toggleLabels(show));
-                window.addEventListener('resize', () => this.resize());
+                canvas.addEventListener('mouseleave', () => isDragging = false);
             }
 
-            createNet() {
-                this.netGroup = new THREE.Group();
-                this.netGroup.position.x = -1.5; // Offset for UI
-                this.scene.add(this.netGroup);
+            createStructure() {
+                this.group = new THREE.Group();
+                this.scene.add(this.group);
 
-                const geo = new THREE.SphereGeometry(0.4, 32, 32);
+                // Materials
+                const webMat = new THREE.LineBasicMaterial({ color: 0xcc2936, linewidth: 2 }); // Red
+                const harpMat = new THREE.LineBasicMaterial({ color: 0xd4a017, linewidth: 2 }); // Yellow
+                const structureMat = new THREE.LineBasicMaterial({ color: 0x666666, linewidth: 1 }); // Grey
 
-                NODE_POSITIONS.forEach((pos, i) => {
-                    // Mesh
+                // Create sensor nodes
+                ALL_NODES.forEach((pos, i) => {
+                    const isHarp = i >= 2;
+                    const color = isHarp ? 0xd4a017 : 0xcc2936;
+                    
+                    const geo = new THREE.SphereGeometry(0.25, 32, 32);
                     const mat = new THREE.MeshStandardMaterial({
                         color: 0xffffff,
-                        emissive: 0xcc2936,
-                        emissiveIntensity: 0.1,
-                        roughness: 0.3, metalness: 0.1
+                        emissive: color,
+                        emissiveIntensity: 0.3,
+                        roughness: 0.3,
+                        metalness: 0.1
                     });
+                    
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(pos.x, pos.y, pos.z);
-                    this.netGroup.add(mesh);
+                    this.group.add(mesh);
                     this.nodes.push(mesh);
-                    this.basePosY.push(pos.y);
-
-                    // Label
-                    const label = document.createElement('div');
-                    label.className = 'node-label visible';
-                    label.innerHTML = `<strong>Sensor ${i}</strong><br>Ch ${i + 1}`;
-                    this.labelsContainer.appendChild(label);
-                    this.labels.push({ el: label, obj: mesh });
                 });
 
-                // Edges
-                const lineMat = new THREE.LineBasicMaterial({ color: 0xcccccc, linewidth: 2 });
-                for (let i = 1; i < this.nodes.length; i++) {
-                    // Center to ring
-                    let pts = [this.nodes[0].position.clone(), this.nodes[i].position.clone()];
-                    let lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-                    this.netGroup.add(new THREE.Line(lineGeo, lineMat));
+                // Web radial spokes (12 lines from center)
+                // Use a virtual center point for visualization
+                const centerPos = new THREE.Vector3(0, 0.2, 0);
+                const spokeCount = 12;
+                const radius = 3.5;
+                
+                for (let i = 0; i < spokeCount; i++) {
+                    const angle = (i / spokeCount) * Math.PI * 2;
+                    const x = Math.cos(angle) * radius;
+                    const z = Math.sin(angle) * radius;
+                    const y = 0.2; // Slightly above ground
+                    
+                    const pts = [
+                        centerPos,
+                        new THREE.Vector3(x, y, z)
+                    ];
+                    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+                    this.group.add(new THREE.Line(geo, webMat));
+                }
 
-                    // Ring to ring
-                    let next = i === this.nodes.length - 1 ? 1 : i + 1;
-                    pts = [this.nodes[i].position.clone(), this.nodes[next].position.clone()];
-                    lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-                    this.netGroup.add(new THREE.Line(lineGeo, lineMat));
+                // Concentric rings (2 circles)
+                const rings = [
+                    { radius: 1.8, segments: 16 },
+                    { radius: 3.2, segments: 24 }
+                ];
+                
+                rings.forEach(ring => {
+                    const points = [];
+                    for (let i = 0; i <= ring.segments; i++) {
+                        const angle = (i / ring.segments) * Math.PI * 2;
+                        points.push(new THREE.Vector3(
+                            Math.cos(angle) * ring.radius,
+                            0.2,
+                            Math.sin(angle) * ring.radius
+                        ));
+                    }
+                    const geo = new THREE.BufferGeometry().setFromPoints(points);
+                    this.group.add(new THREE.Line(geo, webMat));
+                });
+
+                // Harp vertical string
+                // Visual line for harp
+                const harpTop = new THREE.Vector3(0, 3.2, -1);
+                const harpBottom = new THREE.Vector3(0, 0, -1);
+                const pts = [harpTop, harpBottom];
+                const geo = new THREE.BufferGeometry().setFromPoints(pts);
+                this.group.add(new THREE.Line(geo, harpMat));
+
+                // Steel truss (torus at base)
+                const trussGeo = new THREE.TorusGeometry(3.5, 0.08, 8, 32);
+                const trussMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x888888, 
+                    roughness: 0.5, 
+                    metalness: 0.7 
+                });
+                const truss = new THREE.Mesh(trussGeo, trussMat);
+                truss.rotation.x = Math.PI / 2;
+                truss.position.y = 0;
+                this.scene.add(truss);
+
+                // Overhead beam (cylinder)
+                const beamGeo = new THREE.CylinderGeometry(0.06, 0.06, 8, 16);
+                const beamMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x666666, 
+                    roughness: 0.6 
+                });
+                const beam = new THREE.Mesh(beamGeo, beamMat);
+                beam.rotation.z = Math.PI / 2;
+                beam.position.set(0, 3.2, 0);
+                this.scene.add(beam);
+
+                // Create labels
+                this.labelsContainer = document.createElement('div');
+                this.labelsContainer.id = 'labels-container';
+                document.body.appendChild(this.labelsContainer);
+
+                ALL_NODES.forEach((pos, i) => {
+                    const label = document.createElement('div');
+                    label.className = 'node-label';
+                    const isHarp = i >= 2;
+                    const zone = isHarp ? 'Harp' : 'Web';
+                    // Web sensors are 1-based index (1, 2)
+                    // Harp sensor is 1-based index (1)
+                    const num = isHarp ? i - 1 : i + 1;
+                    label.innerHTML = `<strong>${zone} ${num}</strong>`;
+                    this.labelsContainer.appendChild(label);
+                    this.labels.push({ el: label, node: this.nodes[i] });
+                });
+            }
+
+            pulse(sensor) {
+                if (sensor < this.nodes.length) {
+                    const node = this.nodes[sensor];
+                    const baseIntensity = node.material.emissiveIntensity;
+                    
+                    node.material.emissiveIntensity = 1.0;
+                    
+                    setTimeout(() => {
+                        node.material.emissiveIntensity = baseIntensity;
+                    }, 100);
                 }
             }
 
             toggleLabels(show) {
                 this.showLabels = show;
-                this.labels.forEach(l => {
-                    l.el.classList.toggle('visible', show);
-                });
-            }
-
-            triggerNode(index, velocity) {
-                const node = this.nodes[index];
-                if (!node) return;
-                const intensity = velocity / 127;
-
-                gsap.fromTo(node.scale, { x: 1.8, y: 1.8, z: 1.8 }, { x: 1, y: 1, z: 1, duration: 0.5, ease: 'elastic.out(1,0.4)' });
-                gsap.fromTo(node.material, { emissiveIntensity: 1.5 * intensity }, { emissiveIntensity: 0.1, duration: 2 });
             }
 
             animate() {
                 requestAnimationFrame(() => this.animate());
 
-                // Update Labels
+                // Update label positions
                 if (this.showLabels) {
-                    this.labels.forEach(item => {
-                        // Project 3D to 2D
-                        const vector = item.obj.position.clone();
-                        vector.applyMatrix4(this.netGroup.matrixWorld); // Apply offset
-                        vector.project(this.camera);
-
-                        const x = (vector.x * .5 + .5) * innerWidth;
-                        const y = (-(vector.y * .5) + .5) * innerHeight;
-
-                        // Only show if in front of camera
-                        if (vector.z < 1) {
-                            item.el.style.transform = `translate(-50%, -100%) translate(${x}px,${y}px)`;
-                            item.el.style.display = 'block';
-                        } else {
-                            item.el.style.display = 'none';
-                        }
+                    this.labels.forEach(({ el, node }) => {
+                        const screenPos = this.toScreenPosition(node);
+                        el.style.left = screenPos.x + 'px';
+                        el.style.top = screenPos.y + 'px';
+                        el.classList.remove('hidden');
                     });
+                } else {
+                    this.labels.forEach(({ el }) => el.classList.add('hidden'));
                 }
 
                 this.renderer.render(this.scene, this.camera);
+            }
+
+            toScreenPosition(obj) {
+                const vector = obj.position.clone();
+                vector.project(this.camera);
+                
+                return {
+                    x: (vector.x + 1) / 2 * innerWidth,
+                    y: -(vector.y - 1) / 2 * innerHeight
+                };
             }
 
             resize() {
@@ -845,198 +888,229 @@
             }
         }
 
-        // === MIDI CONFIGURATION ===
-        // ┌────────────────────────────────────────────────────────┐
-        // │  Adjust these for your hardware setup                  │
-        // └────────────────────────────────────────────────────────┘
-        const MIDI_CONFIG = {
-            // Which channels to accept (1-indexed, matches hardware)
-            // Example: [1, 2, 3] = only 3 sensors connected
-            // Example: [1, 2, 3, 4, 5, 6] = all 6 sensors
-            enabledChannels: [1, 2, 3],
-
-            // Minimum velocity to trigger (0-127)
-            // Higher = less sensitive, filters weak hits & crosstalk
-            // 0 = any touch, 30 = light hits, 60 = firm hits only
-            velocityThreshold: 30,
-
-            // Milliseconds to ignore repeat triggers per sensor
-            // Prevents "ringing" from piezo vibration
-            // 150 = responsive, 300 = stable, 500 = very stable
-            debounceMs: 200
-        };
-
-        // === MIDI INPUT ===
-        class MIDI {
-            constructor(bus, debug) {
+        // ===== DEBUG PANEL =====
+        class DebugPanel {
+            constructor(bus, audio) {
                 this.bus = bus;
-                this.debug = debug;
+                this.audio = audio;
+                this.isOpen = false;
+                this.panel = document.getElementById('debug-panel');
+                
+                // Toggle button
+                document.getElementById('debug-toggle').onclick = () => this.toggle();
+                
+                // Update loop
+                setInterval(() => this.update(), 200);
+                
+                // MIDI API Check
+                const apiStat = document.getElementById('dbg-midi-api');
+                if (navigator.requestMIDIAccess) {
+                    apiStat.textContent = "Available";
+                    apiStat.style.color = "#0f0";
+                } else {
+                    apiStat.textContent = "Not Supported";
+                    apiStat.style.color = "#f00";
+                }
+
+                // MIDI logging
+                bus.on('midi-connected', name => {
+                    document.getElementById('dbg-midi-device').textContent = name;
+                });
+                
+                bus.on('trigger', d => {
+                    const zone = d.sensor >= 2 ? 'Harp' : 'Web';
+                    this.logMIDI(`${zone} Sensor ${d.sensor} | Velocity: ${d.velocity}`);
+                });
+            }
+            
+            toggle() {
+                this.isOpen = !this.isOpen;
+                this.panel.classList.toggle('debug-collapsed', !this.isOpen);
+                const btn = document.getElementById('debug-toggle');
+                btn.textContent = this.isOpen ? 'DEBUG ▼' : 'DEBUG ▲';
+            }
+            
+            update() {
+                if (!this.isOpen) return;
+
+                // Preset config
+                document.getElementById('dbg-preset-config').textContent = 
+                    JSON.stringify({
+                        web: this.audio.webPreset,
+                        harp: this.audio.harpPreset
+                    }, null, 2);
+                
+                // Synth parameters
+                const params = document.getElementById('dbg-synth-params');
+                params.innerHTML = `
+                    <div style="color: #d4a017; margin-bottom: 5px;">Web Parameters:</div>
+                    <div>Filter: ${this.audio.filters.web?.frequency.value.toFixed(0)}Hz</div>
+                    <div>Reverb: ${(this.audio.reverbs.web?.wet.value * 100).toFixed(0)}%</div>
+                    <div>Osc: ${this.audio.webPreset.oscillator}</div>
+                    
+                    <div style="color: #d4a017; margin-top: 15px; margin-bottom: 5px;">Harp Parameters:</div>
+                    <div>Filter: ${this.audio.filters.harp?.frequency.value.toFixed(0)}Hz</div>
+                    <div>Reverb: ${(this.audio.reverbs.harp?.wet.value * 100).toFixed(0)}%</div>
+                    <div>Osc: ${this.audio.harpPreset.oscillator}</div>
+                `;
+                
+                // Voice states
+                const states = document.getElementById('dbg-voice-states');
+                states.innerHTML = this.audio.activeVoices.map((v, i) => 
+                    `<div>Sensor ${i}: ${v.active ? `<span style="color:#0f0">ACTIVE (${v.note})</span>` : '<span style="color:#444">idle</span>'}</div>`
+                ).join('');
+            }
+            
+            logMIDI(msg) {
+                const log = document.getElementById('midi-log');
+                const line = document.createElement('div');
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                log.prepend(line);
+                if (log.children.length > 50) log.lastChild.remove();
+                
+                document.getElementById('dbg-midi-last').textContent = msg;
+            }
+        }
+
+        // ===== UI CONTROLLER =====
+        class UI {
+            constructor(bus) {
+                this.bus = bus;
+                this.log = document.getElementById('log');
+                this.autoplayInterval = null;
+                this.showLabels = true;
+
+                // Status LEDs
+                bus.on('audio-ready', () => {
+                    document.getElementById('led-audio').classList.add('on');
+                });
+
+                bus.on('midi-connected', name => {
+                    document.getElementById('led-midi').classList.add('on');
+                    document.getElementById('midi-status').textContent = name;
+                });
+
+                // Preset selectors
+                document.getElementById('web-preset').addEventListener('change', e => {
+                    bus.emit('web-preset', e.target.value);
+                    this.addLog(`Web Preset: ${e.target.value}`);
+                });
+
+                document.getElementById('harp-preset').addEventListener('change', e => {
+                    bus.emit('harp-preset', e.target.value);
+                    this.addLog(`Harp Preset: ${e.target.value}`);
+                });
+
+                // Toggle labels
+                document.getElementById('btn-toggle-labels').addEventListener('click', () => {
+                    this.showLabels = !this.showLabels;
+                    bus.emit('toggle-labels', this.showLabels);
+                });
+
+                // Auto-play
+                document.getElementById('btn-autoplay').addEventListener('click', () => {
+                    this.toggleAutoplay();
+                });
+
+                // Keyboard input
+                document.addEventListener('keydown', e => {
+                    const keyMap = { '1': 0, '2': 1, '3': 2 };
+                    if (keyMap[e.key] !== undefined) {
+                        const velocity = 40 + Math.random() * 80;  // Random 40-120
+                        bus.emit('trigger', { sensor: keyMap[e.key], velocity: Math.floor(velocity) });
+                    }
+                });
+
+                // Log triggers
+                bus.on('trigger', d => {
+                    const zone = d.sensor >= 2 ? 'Harp' : 'Web';
+                    this.addLog(`${zone} Sensor ${d.sensor} | Vel: ${d.velocity}`);
+                });
+            }
+
+            toggleAutoplay() {
+                if (this.autoplayInterval) {
+                    clearInterval(this.autoplayInterval);
+                    this.autoplayInterval = null;
+                    document.getElementById('btn-autoplay').classList.remove('active');
+                    this.addLog('Auto-play stopped');
+                } else {
+                    this.autoplayInterval = setInterval(() => {
+                        // Web: gentle, infrequent
+                        if (Math.random() < 0.3) {
+                            const sensor = Math.floor(Math.random() * 2);
+                            const velocity = 30 + Math.random() * 50;
+                            this.bus.emit('trigger', { sensor, velocity: Math.floor(velocity) });
+                        }
+                        
+                        // Harp: occasional plucks
+                        if (Math.random() < 0.15) {
+                            const sensor = 2; // Only 1 harp sensor at index 2
+                            const velocity = 60 + Math.random() * 60;
+                            this.bus.emit('trigger', { sensor, velocity: Math.floor(velocity) });
+                        }
+                    }, 1000);
+                    document.getElementById('btn-autoplay').classList.add('active');
+                    this.addLog('Auto-play started');
+                }
+            }
+
+            addLog(msg) {
+                const line = document.createElement('div');
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                this.log.prepend(line);
+                if (this.log.children.length > 50) this.log.lastChild.remove();
+            }
+        }
+
+        // ===== MIDI HANDLER =====
+        class MIDIHandler {
+            constructor(bus) {
+                this.bus = bus;
                 this.init();
             }
 
             async init() {
+                if (!navigator.requestMIDIAccess) return;
+                
                 try {
-                    const access = await navigator.requestMIDIAccess();
-                    this.bind(access);
-                    access.onstatechange = () => this.bind(access);
-                } catch (e) {
-                    this.bus.emit('log', 'MIDI: Not available');
+                    const midi = await navigator.requestMIDIAccess();
+                    midi.inputs.forEach(input => {
+                        input.onmidimessage = e => this.handleMessage(e);
+                        this.bus.emit('midi-connected', input.name);
+                    });
+                } catch (err) {
+                    console.warn('MIDI not available:', err);
                 }
             }
 
-            bind(access) {
-                let found = false;
-                let count = 0;
-                const lastTrigger = [0, 0, 0, 0, 0, 0];
-
-                access.inputs.forEach(input => {
-                    found = true;
-                    count++;
-                    this.bus.emit('midi-status', { connected: true, name: input.name });
-
-                    input.onmidimessage = msg => {
-                        const [status, note, vel] = msg.data;
-                        const ch = (status & 0x0F) + 1;
-                        const type = status & 0xF0;
-
-                        // DEBUG LOGGING (always log raw for diagnostics)
-                        this.debug.log(`RAW: [${status}] Ch:${ch} Note:${note} Vel:${vel}`);
-
-                        // FILTER: Note On messages only
-                        if (type !== 0x90) return;
-
-                        // FILTER: Channel must be in enabled list
-                        if (!MIDI_CONFIG.enabledChannels.includes(ch)) return;
-
-                        // FILTER: Velocity must exceed threshold
-                        if (vel < MIDI_CONFIG.velocityThreshold) return;
-
-                        const sensor = ch - 1; // Mapping Ch1->Sensor0
-                        const now = Date.now();
-
-                        // FILTER: Debounce rapid triggers
-                        if (now - lastTrigger[sensor] < MIDI_CONFIG.debounceMs) return;
-
-                        lastTrigger[sensor] = now;
-                        this.bus.emit('trigger', { sensor, velocity: vel, source: 'MIDI', channel: ch });
-                    };
-                });
-                this.debug.updateInputs(count);
-                if (!found) this.bus.emit('midi-status', { connected: false });
-            }
-        }
-
-        // === MAIN APP ===
-        class App {
-            constructor() {
-                this.bus = new Bus();
-                this.debug = new Debugger();
-                this.soundViz = new SoundscapeViz('adsr-canvas', 'sound-params');
-
-                // UI Refs
-                this.$ = {
-                    overlay: document.getElementById('overlay'),
-                    ledAudio: document.getElementById('led-audio'),
-                    ledMidi: document.getElementById('led-midi'),
-                    midiName: document.getElementById('midi-name'),
-                    btnAuto: document.getElementById('btn-auto'),
-                    btnLabels: document.getElementById('btn-labels'),
-                    presetSelect: document.getElementById('preset-select'),
-                    log: document.getElementById('log')
-                };
-
-                // Modules
-                this.viz = new Viz(document.getElementById('canvas-container'), this.bus);
-                this.audio = new Audio(this.bus, this.soundViz);
-                this.midi = new MIDI(this.bus, this.debug);
-
-                // Other inputs
-                this.auto = new AutoPlay(this.bus);
-                this.setupKeyboard();
-
-                this.bindUI();
-                this.bindLog();
-            }
-
-            setupKeyboard() {
-                document.addEventListener('keydown', e => {
-                    if (e.repeat) return;
-                    const n = parseInt(e.key);
-                    if (n >= 1 && n <= 6) {
-                        this.bus.emit('trigger', { sensor: n - 1, velocity: 80, source: 'KBD' });
+            handleMessage(e) {
+                const [status, note, velocity] = e.data;
+                const isNoteOn = (status & 0xF0) === 0x90 && velocity > 0;
+                
+                if (isNoteOn) {
+                    // Map MIDI note to sensor
+                    const sensor = NOTE_MAP[note];
+                    if (sensor !== undefined) {
+                        this.bus.emit('trigger', { sensor, velocity });
                     }
-                });
-            }
-
-            bindUI() {
-                // Start Audio
-                this.$.overlay.onclick = async () => {
-                    await this.audio.init();
-                    this.$.overlay.style.opacity = 0;
-                    setTimeout(() => this.$.overlay.remove(), 500);
-                    this.$.ledAudio.classList.add('on');
-                    this.log('Audio started');
-                };
-
-                // Auto-play
-                this.$.btnAuto.onclick = () => {
-                    const on = this.auto.toggle();
-                    this.$.btnAuto.textContent = on ? 'Stop Auto-Play' : 'Start Auto-Play';
-                    this.$.btnAuto.classList.toggle('active', on);
-                };
-
-                // Toggle Labels
-                this.$.btnLabels.onclick = () => {
-                    const isActive = this.$.btnLabels.classList.toggle('active');
-                    this.$.btnLabels.textContent = isActive ? 'Hide Labels' : 'Show Labels';
-                    this.bus.emit('toggle-labels', isActive);
-                };
-
-                // Presets
-                this.$.presetSelect.onchange = e => {
-                    this.bus.emit('preset', e.target.value);
-                    this.log(`Preset: ${PRESETS[e.target.value].name}`);
-                };
-
-                // MIDI Status
-                this.bus.on('midi-status', s => {
-                    this.$.ledMidi.classList.toggle('on', s.connected);
-                    this.$.midiName.textContent = s.connected ? s.name : 'No MIDI Device';
-                    if (s.connected) this.log(`MIDI: ${s.name}`);
-                });
-            }
-
-            bindLog() {
-                this.bus.on('trigger', d => this.log(`[${d.source}] Sensor ${d.sensor} (Ch${d.channel || '-'}) @ ${d.velocity}`));
-                this.bus.on('log', msg => this.log(msg));
-            }
-
-            log(msg) {
-                const div = document.createElement('div');
-                div.className = 'log-entry';
-                div.innerHTML = `<span class="log-time">${new Date().toISOString().slice(14, 23)}</span> ${msg}`;
-                this.$.log.prepend(div);
-                while (this.$.log.children.length > 20) this.$.log.lastChild.remove();
-            }
-
-            clearLog() {
-                this.$.log.innerHTML = '';
+                }
             }
         }
 
-        // Helper for AutoPlay (simplified for brevity)
-        class AutoPlay {
-            constructor(bus) { this.bus = bus; this.running = false; }
-            toggle() { this.running = !this.running; if (this.running) this.tick(); return this.running; }
-            tick() {
-                if (!this.running) return;
-                this.bus.emit('trigger', { sensor: Math.floor(Math.random() * 6), velocity: 60 + Math.floor(Math.random() * 60), source: 'AUTO' });
-                setTimeout(() => this.tick(), 200 + Math.random() * 600);
-            }
-        }
+        // ===== INIT =====
+        const bus = new Bus();
+        const audio = new AudioEngine(bus);
+        const viz = new Visualizer('canvas', bus);
+        const voiceViz = new VoiceVisualizer('voices-canvas', bus);
+        const ui = new UI(bus);
+        const debug = new DebugPanel(bus, audio);
+        const midi = new MIDIHandler(bus);
 
-        window.addEventListener('DOMContentLoaded', () => window.app = new App());
+        // Start audio on first interaction
+        document.body.addEventListener('click', () => {
+            if (!audio.ready) audio.init();
+        }, { once: true });
     </script>
 </body>
-
 </html>

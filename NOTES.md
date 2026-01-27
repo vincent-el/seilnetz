@@ -148,3 +148,35 @@ in the studio space
 open to the public
 everyone there and guide people through it
 more practical
+
+## 2026-01-27: Working on the Net extension
+
+redesign the web app
+
+### soundscape
+```
+Hallo ihr, 
+Erstmal ich kann morgen leider nicht kommen, sorry für die kurzfristige Absage 
+ 
+Ich hatte überlegt, dass man den vertikalen Part an einem Monochord orientieren könnte. Ich stell es mir ultra satisfying vor.  https://youtu.be/c1aCNMIZ5lM?si=q4AD66mqz-MNzo5z
+
+Für den horizontalen Netzteil habe ich ein bisschen Color Sounds (z.B. white noise, brown noise usw.) und so alpha wave usw. geresearched. Mit der Orginal Idee, dass Bewegung im Netz einen Sound triggered ist das leider nicht so richtig vereinbar, weil diese ganzen calming Sounds erst durch ihr kontinuierliches Rauschen calming werden. 
+
+Man könnte die Idee natürlich abwandeln und dann die erste Bewegung im Netz als trigger für lang anhaltende “Musik”/sounds nehmen. Das Netz ist dann ein Klangteppich
+```
+i.e. harp as monochord (with 2 sensors, does that work?)
+
+### 🎵 Soundscape Decision (FINAL)
+
+**Hybrid Approach Chosen:** Discrete note triggers with extended sustain/release
+
+- **Web (4 sensors):** Trigger discrete notes with 8-15s release → overlapping creates "Klangteppich"
+- **Harp (2 sensors):** Monochord-inspired, shorter notes (2-4s release) for clear feedback
+
+**Rationale:** People need immediate feedback (impulse) to feel agency, but long releases create continuous ambient soundscape through overlap. Best of both worlds.
+
+design
+            - Account for new 3D tent shape (center pulled up)
+            - 2 sensors in web, 1 in harp
+            - Different visual treatment (red web nodes, yellow harp nodes)
+            - Multi-voice envelope visualization (see all 3 sensors simultaneously)
