@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seilnetz V3.0: Sonic Web + Harp</title>
+    <title>Melodic Web</title>
     <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
@@ -986,6 +986,12 @@
             createStructure() {
                 this.group = new THREE.Group();
                 this.scene.add(this.group);
+                
+                // Create subgroups for vibration
+                this.webGroup = new THREE.Group();
+                this.harpGroup = new THREE.Group();
+                this.group.add(this.webGroup);
+                this.group.add(this.harpGroup);
 
                 // Materials
                 const webMat = new THREE.LineBasicMaterial({ color: 0xcc2936, linewidth: 2 }); // Red
@@ -1007,8 +1013,20 @@
                     
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(pos.x, pos.y, pos.z);
-                    this.group.add(mesh);
-                    this.nodes.push(mesh);
+                    
+                    // Add to appropriate group
+                    if (isHarp) this.harpGroup.add(mesh);
+                    else this.webGroup.add(mesh);
+                    
+                    // Store reference with animation state
+                    this.nodes.push({ 
+                        mesh, 
+                        baseScale: 1.0, 
+                        currentScale: 1.0,
+                        baseEmissive: 0.3,
+                        targetEmissive: 0.3,
+                        zone: isHarp ? 'harp' : 'web'
+                    });
                 });
 
                 // Web: Cone shape (lifted center)
@@ -1030,7 +1048,7 @@
                         new THREE.Vector3(x, y, z)
                     ];
                     const geo = new THREE.BufferGeometry().setFromPoints(pts);
-                    this.group.add(new THREE.Line(geo, webMat));
+                    this.webGroup.add(new THREE.Line(geo, webMat));
                 }
 
                 // Concentric rings (interpolated height)
@@ -1051,78 +1069,63 @@
                         ));
                     }
                     const geo = new THREE.BufferGeometry().setFromPoints(points);
-                    this.group.add(new THREE.Line(geo, webMat));
+                    this.webGroup.add(new THREE.Line(geo, webMat));
                 });
 
                 // Harp: Tent-like strings on one side
-                // Connecting overhead beam to torus on one side
                 const harpStrings = 8;
-                const beamWidth = 4.0; // Width on beam to attach to
-                const torusArc = Math.PI / 2; // 90 degrees arc
-                const startAngle = Math.PI / 2 - torusArc / 2; // Centered on +Z side (front) or -Z (back)
-                
-                // Let's put it on the -Z side (back) to match previous node roughly
-                // Torus is in XZ plane. Angle 0 is +X, PI/2 is +Z, PI is -X, 3PI/2 is -Z.
-                // Let's target roughly 3PI/2 (270 deg) which is -Z.
+                const beamWidth = 4.0; 
+                const torusArc = Math.PI / 2; 
                 const centerAngle = 3 * Math.PI / 2;
                 
                 for (let i = 0; i < harpStrings; i++) {
-                    const t = i / (harpStrings - 1); // 0 to 1
-                    
-                    // Top point on beam (spread along X)
+                    const t = i / (harpStrings - 1); 
                     const beamX = (t - 0.5) * beamWidth;
                     const top = new THREE.Vector3(beamX, 3.2, 0);
-                    
-                    // Bottom point on torus (spread along arc)
                     const angle = centerAngle + (t - 0.5) * torusArc;
                     const bottom = new THREE.Vector3(
                         Math.cos(angle) * radius,
-                        0.2, // Connect to truss height
+                        0.2, 
                         Math.sin(angle) * radius
                     );
                     
                     const pts = [top, bottom];
                     const geo = new THREE.BufferGeometry().setFromPoints(pts);
-                    this.group.add(new THREE.Line(geo, harpMat));
+                    this.harpGroup.add(new THREE.Line(geo, harpMat));
                 }
 
-                // Steel truss (torus at base)
+                // Static elements (Truss & Beam) - Add directly to main group
                 const trussGeo = new THREE.TorusGeometry(3.5, 0.08, 8, 32);
                 const trussMat = new THREE.MeshStandardMaterial({ 
-                    color: 0x888888, 
-                    roughness: 0.5, 
-                    metalness: 0.7 
+                    color: 0x888888, roughness: 0.5, metalness: 0.7 
                 });
                 const truss = new THREE.Mesh(trussGeo, trussMat);
                 truss.rotation.x = Math.PI / 2;
                 truss.position.y = 0;
-                this.scene.add(truss);
+                this.group.add(truss);
 
-                // Overhead beam (cylinder)
                 const beamGeo = new THREE.CylinderGeometry(0.06, 0.06, 8, 16);
                 const beamMat = new THREE.MeshStandardMaterial({ 
-                    color: 0x666666, 
-                    roughness: 0.6 
+                    color: 0x666666, roughness: 0.6 
                 });
                 const beam = new THREE.Mesh(beamGeo, beamMat);
                 beam.rotation.z = Math.PI / 2;
                 beam.position.set(0, 3.2, 0);
-                this.scene.add(beam);
+                this.group.add(beam);
                 
-                // Center vertical string (pulling the web up)
                 const pullStringGeo = new THREE.BufferGeometry().setFromPoints([
                     new THREE.Vector3(0, 3.2, 0),
                     new THREE.Vector3(0, centerHeight, 0)
                 ]);
                 const pullStringMat = new THREE.LineBasicMaterial({ color: 0xcccccc, transparent: true, opacity: 0.5 });
-                this.scene.add(new THREE.Line(pullStringGeo, pullStringMat));
+                this.group.add(new THREE.Line(pullStringGeo, pullStringMat));
 
                 // Create labels
                 this.labelsContainer = document.createElement('div');
                 this.labelsContainer.id = 'labels-container';
                 document.body.appendChild(this.labelsContainer);
 
-                ALL_NODES.forEach((pos, i) => {
+                this.nodes.forEach((node, i) => {
                     const label = document.createElement('div');
                     label.className = 'node-label';
                     const isHarp = i >= 2;
@@ -1130,20 +1133,24 @@
                     const num = isHarp ? i - 1 : i + 1;
                     label.innerHTML = `<strong>${zone} ${num}</strong>`;
                     this.labelsContainer.appendChild(label);
-                    this.labels.push({ el: label, node: this.nodes[i] });
+                    this.labels.push({ el: label, node: node.mesh });
                 });
             }
 
             pulse(sensor) {
                 if (sensor < this.nodes.length) {
                     const node = this.nodes[sensor];
-                    const baseIntensity = node.material.emissiveIntensity;
                     
-                    node.material.emissiveIntensity = 1.0;
+                    // Visual pop effect
+                    node.currentScale = 1.5;
+                    node.targetEmissive = 2.0; // Very bright flash
                     
-                    setTimeout(() => {
-                        node.material.emissiveIntensity = baseIntensity;
-                    }, 100);
+                    // Trigger structural vibration
+                    if (node.zone === 'web') {
+                        this.webShake = 1.0;
+                    } else {
+                        this.harpShake = 1.0;
+                    }
                 }
             }
 
@@ -1153,6 +1160,40 @@
 
             animate() {
                 requestAnimationFrame(() => this.animate());
+
+                // Update node animations
+                this.nodes.forEach(n => {
+                    // Decay scale back to 1.0
+                    n.currentScale += (n.baseScale - n.currentScale) * 0.1;
+                    n.mesh.scale.setScalar(n.currentScale);
+                    
+                    // Decay emissive intensity
+                    n.targetEmissive += (n.baseEmissive - n.targetEmissive) * 0.1;
+                    n.mesh.material.emissiveIntensity = n.targetEmissive;
+                });
+
+                // Update vibrations
+                if (this.webShake > 0.01) {
+                    this.webShake *= 0.9; // Decay
+                    this.webGroup.position.set(
+                        (Math.random() - 0.5) * this.webShake * 0.1,
+                        (Math.random() - 0.5) * this.webShake * 0.1,
+                        (Math.random() - 0.5) * this.webShake * 0.1
+                    );
+                } else {
+                    this.webGroup.position.set(0, 0, 0);
+                }
+
+                if (this.harpShake > 0.01) {
+                    this.harpShake *= 0.9;
+                    this.harpGroup.position.set(
+                        (Math.random() - 0.5) * this.harpShake * 0.1,
+                        (Math.random() - 0.5) * this.harpShake * 0.1,
+                        (Math.random() - 0.5) * this.harpShake * 0.1
+                    );
+                } else {
+                    this.harpGroup.position.set(0, 0, 0);
+                }
 
                 // Update label positions
                 if (this.showLabels) {
@@ -1740,6 +1781,8 @@
                     await this.testParamUpdate();
                     await this.testNoteMapping();
                     await this.testConfigExport();
+                    await this.testVibrationLogic();
+                    await this.testBurstLogic();
                     this.log('Tests Completed.', 'info');
                 } catch (e) {
                     this.log(`Test Suite Error: ${e.message}`, 'fail');
@@ -1819,6 +1862,52 @@
                 
                 this.assert(data.web && data.harp, 'Export data should contain web and harp configs');
                 this.assert(data.web.notes.length > 0, 'Web config should have notes');
+            }
+
+            async testVibrationLogic() {
+                this.log('Testing Vibration Logic...', 'info');
+                // Access viz instance from global scope (since we didn't pass it to TestSuite, let's fix that or use global)
+                // Assuming `viz` is available in scope or we pass it
+                if (typeof viz === 'undefined') {
+                    this.log('Visualizer instance not found', 'fail');
+                    return;
+                }
+
+                const initialShake = viz.webShake;
+                viz.pulse(0); // Trigger web sensor
+                
+                const triggeredShake = viz.webShake;
+                this.assert(triggeredShake === 1.0, 'Web shake should be 1.0 after pulse');
+
+                // Simulate frame decay manually if possible, or wait
+                // Since animate runs on requestAnimationFrame, we can just wait a bit
+                await new Promise(r => setTimeout(r, 50));
+                
+                const decayedShake = viz.webShake;
+                this.assert(decayedShake < 1.0 && decayedShake > 0, 'Shake should decay over time');
+            }
+
+            async testBurstLogic() {
+                this.log('Testing Burst Logic...', 'info');
+                let triggerCount = 0;
+                
+                // Spy on bus emit
+                const originalEmit = this.bus.emit;
+                this.bus.emit = (event, data) => {
+                    if (event === 'trigger') triggerCount++;
+                    originalEmit.call(this.bus, event, data);
+                };
+
+                // Trigger a burst
+                ui.triggerBurst(); // Access global UI instance
+
+                // Wait for burst duration (approx 500ms)
+                await new Promise(r => setTimeout(r, 600));
+
+                // Restore spy
+                this.bus.emit = originalEmit;
+
+                this.assert(triggerCount >= 1, `Burst should trigger multiple events (got ${triggerCount})`);
             }
         }
 
