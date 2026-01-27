@@ -232,6 +232,190 @@
         .node-label.hidden {
             opacity: 0;
         }
+
+        /* === CONFIGURATOR PANEL === */
+        #config-panel {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 320px;
+            height: 100%;
+            background: rgba(25, 25, 25, 0.98);
+            border-right: 1px solid #333;
+            z-index: 150;
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 5px 0 20px rgba(0,0,0,0.5);
+        }
+
+        #config-panel.panel-collapsed {
+            transform: translateX(-100%);
+        }
+
+        .panel-header {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            margin: 0;
+            color: #d4a017;
+            font-size: 0.9rem;
+        }
+
+        #config-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1.5rem;
+            cursor: pointer;
+            width: auto;
+            padding: 0;
+            margin: 0;
+        }
+
+        .config-tabs {
+            display: flex;
+            background: #1a1a1a;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 2px solid transparent;
+            margin: 0;
+        }
+
+        .tab-btn.active {
+            color: #d4a017;
+            border-bottom-color: #d4a017;
+            background: rgba(212, 160, 23, 0.05);
+        }
+
+        .config-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .config-section {
+            display: none;
+        }
+
+        .config-section.active {
+            display: block;
+        }
+
+        .config-group {
+            margin-bottom: 20px;
+        }
+
+        .config-group h3 {
+            font-size: 0.65rem;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #222;
+            padding-bottom: 5px;
+        }
+
+        .control-row {
+            margin-bottom: 12px;
+        }
+
+        .control-row label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: #ccc;
+            margin-bottom: 5px;
+        }
+
+        .control-row span.val {
+            color: #d4a017;
+            font-family: monospace;
+        }
+
+        .control-row input[type="range"] {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .control-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #d4a017;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .control-row input[type="text"] {
+            width: 100%;
+            background: #111;
+            border: 1px solid #333;
+            color: #0f0;
+            padding: 5px;
+            font-family: monospace;
+            font-size: 0.7rem;
+        }
+
+        .config-actions {
+            padding: 20px;
+            border-top: 1px solid #333;
+            background: #1a1a1a;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        #config-toggle {
+            position: fixed;
+            left: 20px;
+            top: 20px;
+            width: auto;
+            padding: 8px 15px;
+            background: rgba(30, 30, 30, 0.9);
+            border: 1px solid #444;
+            color: #d4a017;
+            border-radius: 4px;
+            z-index: 140;
+            cursor: pointer;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .file-upload {
+            display: block;
+            text-align: center;
+            padding: 10px;
+            background: #2a2a2a;
+            color: #f5f5f5;
+            border: 1px solid #444;
+            font-size: 0.75rem;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .file-upload:hover { background: #3a3a3a; }
     </style>
 </head>
 <body>
@@ -286,6 +470,36 @@
             <span class="key">3</span> = Harp<br>
             <strong>Mouse:</strong> Drag to rotate<br>
             <strong>Debug:</strong> Toggle footer panel
+        </div>
+    </div>
+
+    <button id="config-toggle">⚙️ Configure</button>
+
+    <div id="config-panel" class="panel-collapsed">
+        <div class="panel-header">
+            <h2>Soundscape Configurator</h2>
+            <button id="config-close">×</button>
+        </div>
+        
+        <div class="config-tabs">
+            <button class="tab-btn active" data-target="web-config">Web</button>
+            <button class="tab-btn" data-target="harp-config">Harp</button>
+        </div>
+
+        <div class="config-content">
+            <!-- Web Configuration -->
+            <div id="web-config" class="config-section active"></div>
+
+            <!-- Harp Configuration -->
+            <div id="harp-config" class="config-section"></div>
+        </div>
+
+        <div class="config-actions">
+            <button id="btn-export">Export</button>
+            <label class="file-upload">
+                Import
+                <input type="file" id="file-import" accept=".json" hidden>
+            </label>
         </div>
     </div>
 
@@ -431,12 +645,12 @@
 
         // 3D Positions
         const WEB_NODES = [
-            { x: -1.5, y: 0.5, z: 0, label: 'Web 1' },
-            { x: 1.5, y: 0.5, z: 0, label: 'Web 2' }
+            { x: -1.5, y: 1.1, z: 0, label: 'Web 1' },
+            { x: 1.5, y: 1.1, z: 0, label: 'Web 2' }
         ];
 
         const HARP_NODES = [
-            { x: 0, y: 2, z: -1, label: 'Harp' }
+            { x: 0, y: 1.5, z: -2.5, label: 'Harp' }
         ];
 
         const ALL_NODES = [...WEB_NODES, ...HARP_NODES];
@@ -498,6 +712,21 @@
 
             setHarpPreset(name) {
                 this.harpPreset = HARP_PRESETS[name] || HARP_PRESETS.monochord;
+                if (this.ready) this.applyPreset();
+            }
+
+            updateParams(zone, params) {
+                const config = zone === 'web' ? this.webPreset : this.harpPreset;
+                
+                // Deep merge/update
+                if (params.oscillator) config.oscillator = params.oscillator;
+                if (params.filter) config.filter = params.filter;
+                if (params.reverb) config.reverb = params.reverb;
+                if (params.envelope) {
+                    Object.assign(config.envelope, params.envelope);
+                }
+                if (params.notes) config.notes = params.notes;
+
                 if (this.ready) this.applyPreset();
             }
 
@@ -724,8 +953,7 @@
                 // Materials
                 const webMat = new THREE.LineBasicMaterial({ color: 0xcc2936, linewidth: 2 }); // Red
                 const harpMat = new THREE.LineBasicMaterial({ color: 0xd4a017, linewidth: 2 }); // Yellow
-                const structureMat = new THREE.LineBasicMaterial({ color: 0x666666, linewidth: 1 }); // Grey
-
+                
                 // Create sensor nodes
                 ALL_NODES.forEach((pos, i) => {
                     const isHarp = i >= 2;
@@ -746,17 +974,19 @@
                     this.nodes.push(mesh);
                 });
 
-                // Web radial spokes (12 lines from center)
-                // Use a virtual center point for visualization
-                const centerPos = new THREE.Vector3(0, 0.2, 0);
+                // Web: Cone shape (lifted center)
+                // Center point lifted to simulate being pulled up
+                const centerHeight = 1.8;
+                const centerPos = new THREE.Vector3(0, centerHeight, 0);
                 const spokeCount = 12;
                 const radius = 3.5;
                 
+                // Radial spokes
                 for (let i = 0; i < spokeCount; i++) {
                     const angle = (i / spokeCount) * Math.PI * 2;
                     const x = Math.cos(angle) * radius;
                     const z = Math.sin(angle) * radius;
-                    const y = 0.2; // Slightly above ground
+                    const y = 0.2; // Rim height
                     
                     const pts = [
                         centerPos,
@@ -766,33 +996,58 @@
                     this.group.add(new THREE.Line(geo, webMat));
                 }
 
-                // Concentric rings (2 circles)
+                // Concentric rings (interpolated height)
                 const rings = [
-                    { radius: 1.8, segments: 16 },
-                    { radius: 3.2, segments: 24 }
+                    { r: 1.2, y: centerHeight * 0.6 },
+                    { r: 2.4, y: centerHeight * 0.3 }
                 ];
                 
                 rings.forEach(ring => {
                     const points = [];
-                    for (let i = 0; i <= ring.segments; i++) {
-                        const angle = (i / ring.segments) * Math.PI * 2;
+                    const segments = 24;
+                    for (let i = 0; i <= segments; i++) {
+                        const angle = (i / segments) * Math.PI * 2;
                         points.push(new THREE.Vector3(
-                            Math.cos(angle) * ring.radius,
-                            0.2,
-                            Math.sin(angle) * ring.radius
+                            Math.cos(angle) * ring.r,
+                            ring.y + 0.2,
+                            Math.sin(angle) * ring.r
                         ));
                     }
                     const geo = new THREE.BufferGeometry().setFromPoints(points);
                     this.group.add(new THREE.Line(geo, webMat));
                 });
 
-                // Harp vertical string
-                // Visual line for harp
-                const harpTop = new THREE.Vector3(0, 3.2, -1);
-                const harpBottom = new THREE.Vector3(0, 0, -1);
-                const pts = [harpTop, harpBottom];
-                const geo = new THREE.BufferGeometry().setFromPoints(pts);
-                this.group.add(new THREE.Line(geo, harpMat));
+                // Harp: Tent-like strings on one side
+                // Connecting overhead beam to torus on one side
+                const harpStrings = 8;
+                const beamWidth = 4.0; // Width on beam to attach to
+                const torusArc = Math.PI / 2; // 90 degrees arc
+                const startAngle = Math.PI / 2 - torusArc / 2; // Centered on +Z side (front) or -Z (back)
+                
+                // Let's put it on the -Z side (back) to match previous node roughly
+                // Torus is in XZ plane. Angle 0 is +X, PI/2 is +Z, PI is -X, 3PI/2 is -Z.
+                // Let's target roughly 3PI/2 (270 deg) which is -Z.
+                const centerAngle = 3 * Math.PI / 2;
+                
+                for (let i = 0; i < harpStrings; i++) {
+                    const t = i / (harpStrings - 1); // 0 to 1
+                    
+                    // Top point on beam (spread along X)
+                    const beamX = (t - 0.5) * beamWidth;
+                    const top = new THREE.Vector3(beamX, 3.2, 0);
+                    
+                    // Bottom point on torus (spread along arc)
+                    const angle = centerAngle + (t - 0.5) * torusArc;
+                    const bottom = new THREE.Vector3(
+                        Math.cos(angle) * radius,
+                        0.2, // Connect to truss height
+                        Math.sin(angle) * radius
+                    );
+                    
+                    const pts = [top, bottom];
+                    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+                    this.group.add(new THREE.Line(geo, harpMat));
+                }
 
                 // Steel truss (torus at base)
                 const trussGeo = new THREE.TorusGeometry(3.5, 0.08, 8, 32);
@@ -816,6 +1071,14 @@
                 beam.rotation.z = Math.PI / 2;
                 beam.position.set(0, 3.2, 0);
                 this.scene.add(beam);
+                
+                // Center vertical string (pulling the web up)
+                const pullStringGeo = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 3.2, 0),
+                    new THREE.Vector3(0, centerHeight, 0)
+                ]);
+                const pullStringMat = new THREE.LineBasicMaterial({ color: 0xcccccc, transparent: true, opacity: 0.5 });
+                this.scene.add(new THREE.Line(pullStringGeo, pullStringMat));
 
                 // Create labels
                 this.labelsContainer = document.createElement('div');
@@ -827,8 +1090,6 @@
                     label.className = 'node-label';
                     const isHarp = i >= 2;
                     const zone = isHarp ? 'Harp' : 'Web';
-                    // Web sensors are 1-based index (1, 2)
-                    // Harp sensor is 1-based index (1)
                     const num = isHarp ? i - 1 : i + 1;
                     label.innerHTML = `<strong>${zone} ${num}</strong>`;
                     this.labelsContainer.appendChild(label);
@@ -1063,6 +1324,167 @@
             }
         }
 
+        // ===== CONFIGURATOR =====
+        class Configurator {
+            constructor(bus, audio) {
+                this.bus = bus;
+                this.audio = audio;
+                this.panel = document.getElementById('config-panel');
+                this.toggleBtn = document.getElementById('config-toggle');
+                this.closeBtn = document.getElementById('config-close');
+                this.isOpen = false;
+
+                this.initUI();
+                this.render('web');
+                this.render('harp');
+            }
+
+            initUI() {
+                this.toggleBtn.onclick = () => this.toggle();
+                this.closeBtn.onclick = () => this.toggle();
+
+                // Tabs
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.onclick = (e) => {
+                        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                        document.querySelectorAll('.config-section').forEach(s => s.classList.remove('active'));
+                        btn.classList.add('active');
+                        document.getElementById(btn.dataset.target).classList.add('active');
+                    };
+                });
+
+                // Export
+                document.getElementById('btn-export').onclick = () => this.export();
+
+                // Import
+                document.getElementById('file-import').onchange = (e) => this.import(e);
+            }
+
+            toggle() {
+                this.isOpen = !this.isOpen;
+                this.panel.classList.toggle('panel-collapsed', !this.isOpen);
+            }
+
+            render(zone) {
+                const config = zone === 'web' ? this.audio.webPreset : this.audio.harpPreset;
+                const container = document.getElementById(`${zone}-config`);
+                
+                container.innerHTML = `
+                    <div class="config-group">
+                        <h3>Oscillator</h3>
+                        <div class="control-row">
+                            <select data-param="oscillator" data-zone="${zone}">
+                                <option value="sine" ${config.oscillator === 'sine' ? 'selected' : ''}>Sine</option>
+                                <option value="triangle" ${config.oscillator === 'triangle' ? 'selected' : ''}>Triangle</option>
+                                <option value="square" ${config.oscillator === 'square' ? 'selected' : ''}>Square</option>
+                                <option value="sawtooth" ${config.oscillator === 'sawtooth' ? 'selected' : ''}>Sawtooth</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="config-group">
+                        <h3>Envelope (ADSR)</h3>
+                        ${this.rangeInput(zone, 'envelope.attack', 'Attack', config.envelope.attack, 0, 5, 0.01, 's')}
+                        ${this.rangeInput(zone, 'envelope.decay', 'Decay', config.envelope.decay, 0, 5, 0.01, 's')}
+                        ${this.rangeInput(zone, 'envelope.sustain', 'Sustain', config.envelope.sustain, 0, 1, 0.01, '')}
+                        ${this.rangeInput(zone, 'envelope.release', 'Release', config.envelope.release, 0, 20, 0.1, 's')}
+                    </div>
+
+                    <div class="config-group">
+                        <h3>Filter & Effects</h3>
+                        ${this.rangeInput(zone, 'filter', 'Filter Freq', config.filter, 100, 10000, 100, 'Hz')}
+                        ${this.rangeInput(zone, 'reverb', 'Reverb Wet', config.reverb, 0, 1, 0.01, '')}
+                    </div>
+
+                    <div class="config-group">
+                        <h3>Notes (MIDI)</h3>
+                        <div class="control-row">
+                            <input type="text" data-param="notes" data-zone="${zone}" value="${config.notes.join(', ')}">
+                        </div>
+                    </div>
+                `;
+
+                // Bind events for this zone
+                container.querySelectorAll('input, select').forEach(el => {
+                    el.oninput = (e) => this.handleInput(e);
+                });
+            }
+
+            rangeInput(zone, param, label, value, min, max, step, unit) {
+                return `
+                    <div class="control-row">
+                        <label>
+                            ${label}
+                            <span class="val" id="val-${zone}-${param.replace('.', '-')}">${value}${unit}</span>
+                        </label>
+                        <input type="range" 
+                            data-zone="${zone}" 
+                            data-param="${param}" 
+                            data-unit="${unit}"
+                            min="${min}" max="${max}" step="${step}" value="${value}">
+                    </div>
+                `;
+            }
+
+            handleInput(e) {
+                const zone = e.target.dataset.zone;
+                const param = e.target.dataset.param;
+                const unit = e.target.dataset.unit || '';
+                let value = e.target.value;
+
+                if (e.target.type === 'range') {
+                    value = parseFloat(value);
+                    document.getElementById(`val-${zone}-${param.replace('.', '-')}`).textContent = value + unit;
+                } else if (param === 'notes') {
+                    value = value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+                }
+
+                // Construct update object
+                const update = {};
+                if (param.includes('.')) {
+                    const [p1, p2] = param.split('.');
+                    update[p1] = { [p2]: value };
+                } else {
+                    update[param] = value;
+                }
+
+                this.audio.updateParams(zone, update);
+            }
+
+            export() {
+                const data = {
+                    web: this.audio.webPreset,
+                    harp: this.audio.harpPreset,
+                    exportedAt: new Date().toISOString()
+                };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `seilnetz-config-${Date.now()}.json`;
+                a.click();
+            }
+
+            import(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if (data.web) this.audio.updateParams('web', data.web);
+                        if (data.harp) this.audio.updateParams('harp', data.harp);
+                        this.render('web');
+                        this.render('harp');
+                        alert('Config imported successfully!');
+                    } catch (err) {
+                        alert('Error parsing JSON config');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+
         // ===== MIDI HANDLER =====
         class MIDIHandler {
             constructor(bus) {
@@ -1105,6 +1527,7 @@
         const voiceViz = new VoiceVisualizer('voices-canvas', bus);
         const ui = new UI(bus);
         const debug = new DebugPanel(bus, audio);
+        const config = new Configurator(bus, audio);
         const midi = new MIDIHandler(bus);
 
         // Start audio on first interaction
