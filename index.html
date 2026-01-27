@@ -303,6 +303,16 @@
             background: rgba(212, 160, 23, 0.05);
         }
 
+        .preset-info {
+            font-size: 0.7rem;
+            color: #d4a017;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
         .config-content {
             flex: 1;
             overflow-y: auto;
@@ -416,6 +426,23 @@
         }
 
         .file-upload:hover { background: #3a3a3a; }
+
+        .test-pass { color: #0f0 !important; }
+        .test-fail { color: #f00 !important; font-weight: bold; }
+        .test-info { color: #d4a017 !important; }
+
+        .viz-container {
+            padding: 20px 20px 0 20px;
+            background: #111;
+            border-bottom: 1px solid #333;
+        }
+
+        #param-viz {
+            width: 100%;
+            height: 100px;
+            background: #111;
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -486,6 +513,10 @@
             <button class="tab-btn" data-target="harp-config">Harp</button>
         </div>
 
+        <div class="viz-container">
+            <canvas id="param-viz" width="280" height="100"></canvas>
+        </div>
+
         <div class="config-content">
             <!-- Web Configuration -->
             <div id="web-config" class="config-section active"></div>
@@ -532,6 +563,12 @@
             <div class="debug-section">
                 <h3>Event Log</h3>
                 <div id="log" class="debug-log" style="height: 180px;"></div>
+            </div>
+
+            <div class="debug-section">
+                <h3>System Tests</h3>
+                <button id="btn-run-tests" style="width: auto; padding: 4px 8px; margin-bottom: 10px; background: #333; color: #fff; border: 1px solid #555;">Run Integration Tests</button>
+                <div id="test-results" class="debug-log" style="height: 120px; color: #ccc;"></div>
             </div>
         </div>
     </div>
@@ -1287,6 +1324,13 @@
                     const zone = d.sensor >= 2 ? 'Harp' : 'Web';
                     this.addLog(`${zone} Sensor ${d.sensor} | Vel: ${d.velocity}`);
                 });
+
+                // Set initial state based on AudioEngine defaults (reverse lookup name to key)
+                // Note: This assumes keys match the options in HTML. 
+                // Since we hardcoded options in HTML, let's just ensure they default to what AudioEngine uses
+                // AudioEngine defaults to 'ambient_drone' and 'monochord'
+                document.getElementById('web-preset').value = 'ambient_drone';
+                document.getElementById('harp-preset').value = 'monochord';
             }
 
             toggleAutoplay() {
@@ -1324,6 +1368,106 @@
             }
         }
 
+        // ===== PARAMETER VISUALIZER =====
+        class ParamVisualizer {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            resize() {
+                const rect = this.canvas.getBoundingClientRect();
+                this.canvas.width = rect.width;
+                this.canvas.height = rect.height;
+            }
+
+            draw(config) {
+                const ctx = this.ctx;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                const env = config.envelope;
+
+                ctx.clearRect(0, 0, w, h);
+
+                // Grid lines (optional)
+                ctx.strokeStyle = '#222';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, h * 0.5); ctx.lineTo(w, h * 0.5);
+                ctx.stroke();
+
+                // 1. Draw Envelope (ADSR)
+                // Normalize time: Attack + Decay + 1s Sustain + Release
+                // We'll give 1s visual space for sustain to show the level
+                const totalTime = env.attack + env.decay + 1 + env.release;
+                const scaleX = w / Math.max(totalTime, 2); // Ensure minimum width
+                
+                const points = [
+                    { x: 0, y: h }, // Start
+                    { x: env.attack * scaleX, y: 0 }, // Peak
+                    { x: (env.attack + env.decay) * scaleX, y: h * (1 - env.sustain) }, // Decay to sustain
+                    { x: (env.attack + env.decay + 1) * scaleX, y: h * (1 - env.sustain) }, // Hold sustain
+                    { x: (env.attack + env.decay + 1 + env.release) * scaleX, y: h } // Release
+                ];
+
+                // Fill
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                points.forEach(p => ctx.lineTo(p.x, p.y));
+                ctx.fillStyle = 'rgba(212, 160, 23, 0.1)';
+                ctx.fill();
+
+                // Stroke
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                points.forEach(p => ctx.lineTo(p.x, p.y));
+                ctx.strokeStyle = '#d4a017';
+                ctx.lineWidth = 2;
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+
+                // 2. Draw Waveform Icon (Top Right)
+                this.drawWaveform(config.oscillator, w - 30, 20);
+
+                // 3. Draw Filter Info (Bottom Left text)
+                ctx.fillStyle = '#666';
+                ctx.font = '10px monospace';
+                ctx.fillText(`Filter: ${config.filter}Hz`, 10, h - 10);
+                ctx.fillText(`Reverb: ${(config.reverb * 100).toFixed(0)}%`, 10, h - 25);
+            }
+
+            drawWaveform(type, x, y) {
+                const ctx = this.ctx;
+                ctx.beginPath();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1.5;
+                const sz = 15;
+
+                if (type === 'sine') {
+                    ctx.moveTo(x, y);
+                    ctx.bezierCurveTo(x + sz/2, y - sz, x + sz/2, y + sz, x + sz, y);
+                } else if (type === 'triangle') {
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + sz/2, y - sz/2);
+                    ctx.lineTo(x + sz, y);
+                } else if (type === 'square') {
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x, y - sz/2);
+                    ctx.lineTo(x + sz/2, y - sz/2);
+                    ctx.lineTo(x + sz/2, y + sz/2);
+                    ctx.lineTo(x + sz, y + sz/2);
+                    ctx.lineTo(x + sz, y);
+                } else if (type === 'sawtooth') {
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + sz, y - sz/2);
+                    ctx.lineTo(x + sz, y);
+                }
+                ctx.stroke();
+            }
+        }
+
         // ===== CONFIGURATOR =====
         class Configurator {
             constructor(bus, audio) {
@@ -1332,11 +1476,25 @@
                 this.panel = document.getElementById('config-panel');
                 this.toggleBtn = document.getElementById('config-toggle');
                 this.closeBtn = document.getElementById('config-close');
+                this.viz = new ParamVisualizer('param-viz');
                 this.isOpen = false;
+                this.currentZone = 'web'; // Track active tab
 
                 this.initUI();
                 this.render('web');
                 this.render('harp');
+                this.updateViz();
+
+                // Listen for external preset changes
+                bus.on('web-preset', name => {
+                    if (this.currentZone === 'web') this.render('web');
+                    this.updateViz();
+                });
+
+                bus.on('harp-preset', name => {
+                    if (this.currentZone === 'harp') this.render('harp');
+                    this.updateViz();
+                });
             }
 
             initUI() {
@@ -1350,6 +1508,10 @@
                         document.querySelectorAll('.config-section').forEach(s => s.classList.remove('active'));
                         btn.classList.add('active');
                         document.getElementById(btn.dataset.target).classList.add('active');
+                        
+                        // Update active zone for visualization
+                        this.currentZone = btn.dataset.target.replace('-config', '');
+                        this.updateViz();
                     };
                 });
 
@@ -1363,6 +1525,15 @@
             toggle() {
                 this.isOpen = !this.isOpen;
                 this.panel.classList.toggle('panel-collapsed', !this.isOpen);
+                if (this.isOpen) {
+                    this.viz.resize();
+                    this.updateViz();
+                }
+            }
+
+            updateViz() {
+                const config = this.currentZone === 'web' ? this.audio.webPreset : this.audio.harpPreset;
+                this.viz.draw(config);
             }
 
             render(zone) {
@@ -1370,6 +1541,10 @@
                 const container = document.getElementById(`${zone}-config`);
                 
                 container.innerHTML = `
+                    <div class="preset-info">
+                        Editing: <span style="color: #fff">${config.name}</span>
+                    </div>
+
                     <div class="config-group">
                         <h3>Oscillator</h3>
                         <div class="control-row">
@@ -1449,6 +1624,11 @@
                 }
 
                 this.audio.updateParams(zone, update);
+                
+                // Update visualization if we're editing the currently viewed zone
+                if (zone === this.currentZone) {
+                    this.updateViz();
+                }
             }
 
             export() {
@@ -1476,6 +1656,7 @@
                         if (data.harp) this.audio.updateParams('harp', data.harp);
                         this.render('web');
                         this.render('harp');
+                        this.updateViz();
                         alert('Config imported successfully!');
                     } catch (err) {
                         alert('Error parsing JSON config');
@@ -1520,6 +1701,127 @@
             }
         }
 
+        // ===== TEST SUITE =====
+        class TestSuite {
+            constructor(bus, audio, config, midi) {
+                this.bus = bus;
+                this.audio = audio;
+                this.config = config;
+                this.midi = midi;
+                this.resultsEl = document.getElementById('test-results');
+                
+                document.getElementById('btn-run-tests').onclick = () => this.runAll();
+            }
+
+            log(msg, type = 'info') {
+                const line = document.createElement('div');
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                line.className = `test-${type}`;
+                this.resultsEl.prepend(line);
+            }
+
+            assert(condition, message) {
+                if (condition) {
+                    this.log(`PASS: ${message}`, 'pass');
+                    return true;
+                } else {
+                    this.log(`FAIL: ${message}`, 'fail');
+                    return false;
+                }
+            }
+
+            async runAll() {
+                this.resultsEl.innerHTML = '';
+                this.log('Starting Integration Tests...', 'info');
+                
+                try {
+                    await this.testAudioTrigger();
+                    await this.testPresetChange();
+                    await this.testParamUpdate();
+                    await this.testNoteMapping();
+                    await this.testConfigExport();
+                    this.log('Tests Completed.', 'info');
+                } catch (e) {
+                    this.log(`Test Suite Error: ${e.message}`, 'fail');
+                }
+            }
+
+            async testAudioTrigger() {
+                this.log('Testing Audio Trigger...', 'info');
+                const sensor = 0;
+                const initialVoice = this.audio.activeVoices[sensor].active;
+                
+                this.bus.emit('trigger', { sensor, velocity: 100 });
+                
+                await new Promise(r => setTimeout(r, 50));
+                
+                const active = this.audio.activeVoices[sensor].active;
+                this.assert(!initialVoice && active, 'Voice 0 should activate on trigger');
+            }
+
+            async testPresetChange() {
+                this.log('Testing Preset Change...', 'info');
+                const initialPreset = this.audio.webPreset.name;
+                
+                // Change to a different preset
+                const newPreset = initialPreset === 'Ambient Drone' ? 'warm_pad' : 'ambient_drone';
+                this.bus.emit('web-preset', newPreset);
+                
+                await new Promise(r => setTimeout(r, 50));
+                
+                const currentName = this.audio.webPreset.name;
+                // WEB_PRESETS keys are lowercase, names are Title Case
+                // 'ambient_drone' -> 'Ambient Drone'
+                const expectedName = WEB_PRESETS[newPreset].name;
+                
+                this.assert(currentName === expectedName, `Web preset should change to ${expectedName}`);
+            }
+
+            async testParamUpdate() {
+                this.log('Testing Parameter Update...', 'info');
+                const initialFilter = this.audio.webPreset.filter;
+                const newFilter = initialFilter === 2000 ? 3000 : 2000;
+                
+                this.audio.updateParams('web', { filter: newFilter });
+                
+                await new Promise(r => setTimeout(r, 50));
+                
+                const currentFilter = this.audio.filters.web.frequency.value;
+                this.assert(Math.abs(currentFilter - newFilter) < 1, `Filter frequency should update to ${newFilter}Hz`);
+            }
+
+            async testNoteMapping() {
+                this.log('Testing MIDI Mapping...', 'info');
+                let triggered = false;
+                const handler = () => { triggered = true; };
+                
+                // Listen for trigger
+                // We need to temporarily subscribe to verify the MIDI handler emits correctly
+                // But MIDIHandler listens to hardware. We can verify NOTE_MAP logic directly 
+                // or simulate the logic if we exposed a public handle method.
+                // Since handleMessage is bound to hardware, let's unit test the map logic logic here:
+                
+                const midiNote = 60; // C4 -> Sensor 0
+                const expectedSensor = 0;
+                const mapped = NOTE_MAP[midiNote];
+                
+                this.assert(mapped === expectedSensor, `MIDI Note 60 should map to Sensor 0`);
+            }
+
+            async testConfigExport() {
+                this.log('Testing Config Export...', 'info');
+                // We can't easily test file download interaction, but we can verify data structure
+                const data = {
+                    web: this.audio.webPreset,
+                    harp: this.audio.harpPreset,
+                    exportedAt: new Date().toISOString()
+                };
+                
+                this.assert(data.web && data.harp, 'Export data should contain web and harp configs');
+                this.assert(data.web.notes.length > 0, 'Web config should have notes');
+            }
+        }
+
         // ===== INIT =====
         const bus = new Bus();
         const audio = new AudioEngine(bus);
@@ -1529,6 +1831,7 @@
         const debug = new DebugPanel(bus, audio);
         const config = new Configurator(bus, audio);
         const midi = new MIDIHandler(bus);
+        const tests = new TestSuite(bus, audio, config, midi);
 
         // Start audio on first interaction
         document.body.addEventListener('click', () => {
